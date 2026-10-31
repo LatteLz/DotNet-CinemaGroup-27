@@ -1,5 +1,14 @@
+# .NET Core / Visual Studio / Rider Ignore File
 bin/
 obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+.vs/
+*.user
+*.suo
+*.userosscache
+.history/
+.vscode/
+artifacts/
+.artifacts/
