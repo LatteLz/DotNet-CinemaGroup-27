@@ -17,9 +17,8 @@ namespace CinemaManagement.Models
 
         [Required]
         [StringLength(50)]
-        public string Status { get; set; } // Ví dụ: Pending, Completed, Cancelled
-
-        // Thuộc tính điều hướng (Navigation Properties) liên kết với Vé, Combo và Thanh toán
+        public string Status { get; set; } 
+        
         public virtual ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
         
         public virtual ICollection<BookingCombo> BookingCombos { get; set; } = new List<BookingCombo>();

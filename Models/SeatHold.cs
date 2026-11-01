@@ -12,16 +12,16 @@ namespace CinemaManagement.Models
         public int ShowtimeId { get; set; }
 
         [ForeignKey("ShowtimeId")]
-        public virtual Showtime Showtime { get; set; } // Thuộc tính điều hướng liên kết với Showtime
+        public virtual Showtime Showtime { get; set; } 
 
         public int SeatId { get; set; }
 
         [ForeignKey("SeatId")]
-        public virtual Seat Seat { get; set; } // Thuộc tính điều hướng liên kết với Seat
+        public virtual Seat Seat { get; set; } 
 
-        public DateTime ExpiresAt { get; set; } // Thời gian hết hạn giữ ghế (ví dụ: +3 phút)
+        public DateTime ExpiresAt { get; set; } 
 
         [StringLength(100)]
-        public string SessionId { get; set; } // Mã phiên làm việc/thiết bị đang giữ ghế
+        public string SessionId { get; set; } 
     }
 }
