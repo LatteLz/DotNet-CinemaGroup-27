@@ -13,7 +13,7 @@ namespace CinemaManagement.Models
         [ForeignKey("BookingId")]
         public virtual Booking Booking { get; set; }
 
-        public int ComboId { get; set; } // Sửa lại chữ d thành hoa (ComboId) để đồng bộ đặt tên
+        public int ComboId { get; set; } 
         
         [ForeignKey("ComboId")]
         public virtual ComboItem ComboItem { get; set; }
