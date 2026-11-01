@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
-        <TargetFramework>net8.0-windows</TargetFramework>
+        <TargetFramework>net10.0-windows</TargetFramework>
         <Nullable>enable</Nullable>
         <UseWindowsForms>true</UseWindowsForms>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -17,11 +17,22 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Forms\Admin\" />
       <Folder Include="Forms\Kiosk\" />
       <Folder Include="Forms\Staff\" />
       <Folder Include="Helpers\" />
       <Folder Include="Services\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Update="Forms\Admin\FrmRoleSelection.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Admin\FrmAdminDashboard.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Admin\FrmAdminMovies.cs">
+        <SubType>Form</SubType>
+      </Compile>
     </ItemGroup>
 
 </Project>
