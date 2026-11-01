@@ -17,11 +17,11 @@ namespace CinemaManagement.Models
         public int ShowtimeId{get;set;}
         [ForeignKey("ShowtimeId")]
         public virtual Showtime Showtime {get;set;} 
-        public virtual ICollection<Tickets> Tickets {get;set;}=new List<Ticket>();
+        public virtual ICollection<Ticket> Tickets {get;set;}=new List<Ticket>();
         
     }
     }
     
-
+    
     
     
