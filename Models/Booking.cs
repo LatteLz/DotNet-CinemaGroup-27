@@ -25,4 +25,7 @@ namespace CinemaManagement.Models
         
         public virtual Payment Payment { get; set; }
     }
-}
+    
+    
+    
+    
