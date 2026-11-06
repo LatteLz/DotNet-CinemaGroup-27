@@ -12,15 +12,13 @@ namespace CinemaManagement.Models
         public int BookingId { get; set; }
 
         [ForeignKey("BookingId")]
-        public virtual Booking Booking { get; set; } 
-
-        [Column(TypeName = "decimal(18,2)")]
+        public virtual Booking Booking { get; set; }
         public decimal Amount { get; set; } 
 
         public DateTime PaymentTime { get; set; } = DateTime.Now; 
 
         [StringLength(50)]
-        public string PaymentMethod { get: set; } 
+        public string PaymentMethod { get; set; } 
 
         [StringLength(50)]
         public string Status { get; set; } 

@@ -24,7 +24,6 @@ namespace CinemaManagement.Models
 
         public DateTime EndTime { get; set; } 
 
-        [Column(TypeName = "decimal(18,2)")]
         public decimal TicketPrice { get; set; }
         
         public virtual ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
