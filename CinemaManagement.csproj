@@ -21,7 +21,6 @@
       <Folder Include="Forms\Kiosk\" />
       <Folder Include="Forms\Staff\" />
       <Folder Include="Helpers\" />
-      <Folder Include="Services\" />
     </ItemGroup>
 
 </Project>
