@@ -83,11 +83,13 @@ namespace CinemaManagement.Forms.Admin
             lblSubtitle.AutoSize = true;
             pnlHeader.Controls.Add(lblSubtitle);
 
-            this.Controls.Add(pnlHeader);
             cardAdmin = CreateCard("Hệ thống Quản trị Admin", "DIRECTOR & OPS SUITE", 
                 "Quản lý phim, phòng chiếu, lịch chiếu, thống kê doanh thu và cấu hình hệ thống chuyên sâu cho quản lý rạp.", 
                 "Truy cập Admin Console →", Color.FromArgb(2, 132, 199), 270, (sender, e) => {
-                    MessageBox.Show("Chuyển hướng đến Admin Console...", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    FrmAdminMovies adminMovies = new FrmAdminMovies();
+                    this.Hide();
+                    adminMovies.ShowDialog();
+                    this.Show();
                 });
             this.Controls.Add(cardAdmin);
 

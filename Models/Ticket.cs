@@ -21,9 +21,7 @@ namespace CinemaManagement.Models
         public int SeatId { get; set; }
 
         [ForeignKey("SeatId")]
-        public virtual Seat Seat { get; set; } 
-
-        [Column(TypeName = "decimal(18,2)")]
+        public virtual Seat Seat { get; set; }
         public decimal Price { get; set; } 
     }
 }

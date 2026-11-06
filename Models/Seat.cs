@@ -20,9 +20,7 @@ namespace CinemaManagement.Models
 
         [Required]
         [StringLength(50)]
-        public string SeatType { get; set; } 
-
-        [Column(TypeName = "decimal(18,2)")]
+        public string SeatType { get; set; }
         public decimal Price { get; set; } 
         
         public virtual ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();

@@ -15,8 +15,11 @@ namespace CinemaManagement.Data
         public DbSet<ComboItem> ComboItems { get; set; }
         public DbSet<BookingCombo> BookingCombos { get; set; }
         public DbSet<Payment> Payments { get; set; }
+        public DbSet<User> Users { get; set; } = null!;
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        {optionsBuilder.UseSqlite("Data Source=cinema.db");
+        {
+            optionsBuilder.UseSqlite("Data Source=cinema.db");
         }
     }
 }
