@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
+using CinemaManagement.Forms.Staff;
 
 namespace CinemaManagement.Forms.Admin
 {
@@ -103,7 +104,11 @@ namespace CinemaManagement.Forms.Admin
             cardPos = CreateCard("Quầy POS Nhân viên Thu ngân", "CASHIER FRONT DESK", 
                 "Dành cho nhân viên bán vé trực tiếp tại quầy, xuất hóa đơn nhanh và quản lý combo bắp nước đi kèm.", 
                 "Mở Giao diện POS →", Color.FromArgb(2, 132, 199), 950, (sender, e) => {
-                    MessageBox.Show("Mở giao diện POS thu ngân...", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    // Thay MessageBox bằng cách khởi tạo và mở FrmStaffPOS
+                    FrmStaffPOS staffPos = new FrmStaffPOS();
+                    this.Hide();
+                    staffPos.ShowDialog();
+                    this.Show();
                 });
             this.Controls.Add(cardPos);
 
