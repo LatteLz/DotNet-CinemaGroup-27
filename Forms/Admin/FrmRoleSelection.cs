@@ -4,6 +4,7 @@ using System.Windows.Forms;
 using CinemaManagement.Forms.Staff;
 using CinemaManagement.Forms.Admin;
 
+using CinemaManagement.Forms.Kiosk;
 namespace CinemaManagement.Forms.Admin
 {
     public partial class FrmRoleSelection : Form
@@ -96,18 +97,21 @@ namespace CinemaManagement.Forms.Admin
             cardKiosk = CreateCard("Ki-ốt Khách hàng Tự phục vụ", "CUSTOMER SELF-SERVICE", 
                 "Dành cho khách hàng tra cứu phim, chọn suất chiếu, đặt ghế và tự thanh toán in vé tự động nhanh chóng.", 
                 "Khởi chạy Chế độ Ki-ốt →", Color.FromArgb(217, 119, 6), 610, (sender, e) => {
-                    MessageBox.Show("Khởi chạy giao diện Ki-ốt...", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                });
+                    FrmKioskHome kioskHome = new FrmKioskHome();
+                    this.Hide();
+                    kioskHome.ShowDialog();
+                    this.Show();
+                    });
             this.Controls.Add(cardKiosk);
 
             cardPos = CreateCard("Quầy POS Nhân viên Thu ngân", "CASHIER FRONT DESK", 
                 "Dành cho nhân viên bán vé trực tiếp tại quầy, xuất hóa đơn nhanh và quản lý combo bắp nước đi kèm.", 
                 "Mở Giao diện POS →", Color.FromArgb(2, 132, 199), 950, (sender, e) => {
+                    FrmKioskHome kioskHome = new FrmKioskHome();
                     this.Hide();
-                    FrmLogin loginForm = new FrmLogin();
-                    loginForm.ShowDialog();
-                    this.Close();
-                });
+                    kioskHome.ShowDialog();
+                    this.Show();
+                    });
             this.Controls.Add(cardPos);
 
             pnlFooter = new Panel();

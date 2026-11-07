@@ -18,6 +18,9 @@
 
     <ItemGroup>
       <Folder Include="Forms\Kiosk\" />
+      <Folder Include="Forms\Staff\" />
+      <Folder Include="Helpers\" />
+      <Folder Include="Services\" />
     </ItemGroup>
 
     <ItemGroup>
@@ -42,6 +45,21 @@
       <Compile Update="Forms\Staff\FrmLogin.cs">
         <SubType>Form</SubType>
       </Compile>
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="Image\avatar.jpg">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="Image\Conan.jpg">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="Image\Traibuonnguoi.jpg">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="Image\Spider.jpg">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>

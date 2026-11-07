@@ -404,14 +404,43 @@ namespace CinemaManagement.Forms.Admin
             var card = new Panel { Width = 330, Height = 332, Margin = new Padding(0, 0, 20, 20), BackColor = BgCard };
 
             var poster = new Panel { Width = 330, Height = 170, Location = new Point(0, 0), BackColor = BgSurface };
-            poster.Controls.Add(new Label
+            var picPoster = new PictureBox
             {
-                Text = title.Substring(0, 1).ToUpper(),
                 Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = TxtMuted,
-                Font = new Font("Segoe UI", 42F, FontStyle.Bold)
-            });
+                SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = BgSurface
+            };
+
+            if (!string.IsNullOrEmpty(m.PosterPath))
+            {
+                string cleanPath = m.PosterPath.TrimStart('/', '\\');
+                string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, cleanPath);
+
+                if (File.Exists(fullPath))
+                {
+                    try
+                    {
+                        using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read);
+                        picPoster.Image = Image.FromStream(fs);
+                    }
+                    catch { }
+                }
+            }
+
+            poster.Controls.Add(picPoster);
+
+            if (picPoster.Image == null)
+            {
+                poster.Controls.Add(new Label
+                {
+                    Text = title.Substring(0, 1).ToUpper(),
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    ForeColor = TxtMuted,
+                    Font = new Font("Segoe UI", 42F, FontStyle.Bold)
+                });
+            }
+
             var lblAge = new Label
             {
                 Text = age,
