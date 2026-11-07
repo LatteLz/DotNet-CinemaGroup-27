@@ -3,8 +3,8 @@ using System.Drawing;
 using System.Windows.Forms;
 using CinemaManagement.Forms.Staff;
 using CinemaManagement.Forms.Admin;
-
 using CinemaManagement.Forms.Kiosk;
+
 namespace CinemaManagement.Forms.Admin
 {
     public partial class FrmRoleSelection : Form
@@ -87,9 +87,9 @@ namespace CinemaManagement.Forms.Admin
             cardAdmin = CreateCard("Hệ thống Quản trị Admin", "DIRECTOR & OPS SUITE", 
                 "Quản lý phim, phòng chiếu, lịch chiếu, thống kê doanh thu và cấu hình hệ thống chuyên sâu cho quản lý rạp.", 
                 "Truy cập Admin Console →", Color.FromArgb(2, 132, 199), 270, (sender, e) => {
-                    FrmAdminMovies adminMovies = new FrmAdminMovies();
+                    FrmLogin loginForm = new FrmLogin();
                     this.Hide();
-                    adminMovies.ShowDialog();
+                    loginForm.ShowDialog();
                     this.Show();
                 });
             this.Controls.Add(cardAdmin);
@@ -101,17 +101,17 @@ namespace CinemaManagement.Forms.Admin
                     this.Hide();
                     kioskHome.ShowDialog();
                     this.Show();
-                    });
+                });
             this.Controls.Add(cardKiosk);
 
             cardPos = CreateCard("Quầy POS Nhân viên Thu ngân", "CASHIER FRONT DESK", 
                 "Dành cho nhân viên bán vé trực tiếp tại quầy, xuất hóa đơn nhanh và quản lý combo bắp nước đi kèm.", 
                 "Mở Giao diện POS →", Color.FromArgb(2, 132, 199), 950, (sender, e) => {
-                    FrmKioskHome kioskHome = new FrmKioskHome();
+                    FrmLogin loginForm = new FrmLogin();
                     this.Hide();
-                    kioskHome.ShowDialog();
+                    loginForm.ShowDialog();
                     this.Show();
-                    });
+                });
             this.Controls.Add(cardPos);
 
             pnlFooter = new Panel();
