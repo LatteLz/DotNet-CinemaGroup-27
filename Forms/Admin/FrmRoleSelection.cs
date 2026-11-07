@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
+using CinemaManagement.Forms.Staff;
+using CinemaManagement.Forms.Admin;
+
 using CinemaManagement.Forms.Kiosk;
 namespace CinemaManagement.Forms.Admin
 {
@@ -30,7 +33,6 @@ namespace CinemaManagement.Forms.Admin
             this.BackColor = Color.FromArgb(16, 20, 24); 
             this.ForeColor = Color.White;
 
-            //slide3
             pnlSidebar = new Panel();
             pnlSidebar.Dock = DockStyle.Left;
             pnlSidebar.Width = 240;
@@ -61,7 +63,6 @@ namespace CinemaManagement.Forms.Admin
             }
             this.Controls.Add(pnlSidebar);
 
-            // trên
             pnlHeader = new Panel();
             pnlHeader.Dock = DockStyle.Top;
             pnlHeader.Height = 130;
@@ -113,7 +114,6 @@ namespace CinemaManagement.Forms.Admin
                     });
             this.Controls.Add(cardPos);
 
-            //dưới
             pnlFooter = new Panel();
             pnlFooter.Dock = DockStyle.Bottom;
             pnlFooter.Height = 50;

@@ -17,6 +17,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Folder Include="Forms\Kiosk\" />
       <Folder Include="Forms\Staff\" />
       <Folder Include="Helpers\" />
       <Folder Include="Services\" />
@@ -30,6 +31,18 @@
         <SubType>Form</SubType>
       </Compile>
       <Compile Update="Forms\Admin\FrmAdminMovies.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Staff\FrmAdminCombos.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Staff\FrmStaffPOS.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Staff\FrmAdminUsers.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Staff\FrmLogin.cs">
         <SubType>Form</SubType>
       </Compile>
     </ItemGroup>
