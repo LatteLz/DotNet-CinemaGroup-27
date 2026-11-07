@@ -7,16 +7,12 @@ namespace CinemaManagement.Models
 {
     public class Booking
     {
-        [Key] public int BookingId { get; set; }
-
-        public DateTime BookingTime { get; set; } = DateTime.Now;
-        [Required] [StringLength(50)] public string Status { get; set; }
-
-        public virtual ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
-
-        public virtual ICollection<BookingCombo> BookingCombos { get; set; } = new List<BookingCombo>();
-
-        public virtual Payment Payment { get; set; }
+        public int Id { get; set; }
+        public string MovieTitle { get; set; }
+        public string ShowtimeInfo { get; set; }
+        public decimal TotalAmount { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public virtual ICollection<Payment> Payments { get; set; }
     }
 }
     

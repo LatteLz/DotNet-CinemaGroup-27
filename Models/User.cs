@@ -1,20 +1,27 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
-namespace CinemaManagement.Models;
-
-public class User
+namespace CinemaManagement.Models
 {
-    [Key]
-    public int UserId { get; set; }
+    public class User
+    {
+        public int Id { get; set; }
+        public string Username { get; set; }
 
-    [Required] [StringLength(50)] public string Username { get; set; } = string.Empty;
+        [Required]
+        [StringLength(255)]
+        public string PasswordHash { get; set; } = string.Empty;
 
-    [Required] [StringLength(255)] public string PasswordHash { get; set; } = string.Empty;
+        [Required]
+        [StringLength(100)]
+        public string Fullname { get; set; } = string.Empty;
 
-    [Required] [StringLength(100)] public string Fullname { get; set; } =string.Empty;
+        [StringLength(50)]
+        public string Role { get; set; } = "Staff";
 
-     [StringLength(50)] public string Role { get; set; } = "Staff"; //ad,staff, khach
-    public bool IsActive  { get; set; } = true;
-    public DateTime CreateAt{ get; set; }= DateTime.Now;
+        public string Salt { get; set; } 
 
+        public bool IsActive { get; set; } = true;
+        public DateTime CreateAt { get; set; } = DateTime.Now;
+    }
 }
