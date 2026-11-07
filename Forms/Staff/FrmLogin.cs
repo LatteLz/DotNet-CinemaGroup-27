@@ -61,7 +61,6 @@ namespace CinemaManagement.Forms.Admin
                 Size = new Size(460, 580),
                 BackColor = COLOR_CARD_BG
             };
-            
             pnlCard.Location = new Point((this.ClientSize.Width - pnlCard.Width) / 2, (this.ClientSize.Height - pnlCard.Height) / 2);
             pnlCard.Anchor = AnchorStyles.None;
 
@@ -70,8 +69,7 @@ namespace CinemaManagement.Forms.Admin
                 Text = "🎬",
                 Font = new Font("Segoe UI", 22),
                 ForeColor = COLOR_AMBER,
-                Location = new Point((pnlCard.Width - 50) / 2, 20),
-                Size = new Size(50, 45),
+                Location = new Point((pnlCard.Width - 50) / 2, 20),                Size = new Size(50, 45),
                 TextAlign = ContentAlignment.MiddleCenter
             };
 
