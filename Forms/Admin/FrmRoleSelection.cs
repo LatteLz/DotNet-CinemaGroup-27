@@ -2,6 +2,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 using CinemaManagement.Forms.Staff;
+using CinemaManagement.Forms.Admin;
 
 namespace CinemaManagement.Forms.Admin
 {
@@ -31,7 +32,6 @@ namespace CinemaManagement.Forms.Admin
             this.BackColor = Color.FromArgb(16, 20, 24); 
             this.ForeColor = Color.White;
 
-            //slide3
             pnlSidebar = new Panel();
             pnlSidebar.Dock = DockStyle.Left;
             pnlSidebar.Width = 240;
@@ -62,7 +62,6 @@ namespace CinemaManagement.Forms.Admin
             }
             this.Controls.Add(pnlSidebar);
 
-            // trên
             pnlHeader = new Panel();
             pnlHeader.Dock = DockStyle.Top;
             pnlHeader.Height = 130;
@@ -104,15 +103,13 @@ namespace CinemaManagement.Forms.Admin
             cardPos = CreateCard("Quầy POS Nhân viên Thu ngân", "CASHIER FRONT DESK", 
                 "Dành cho nhân viên bán vé trực tiếp tại quầy, xuất hóa đơn nhanh và quản lý combo bắp nước đi kèm.", 
                 "Mở Giao diện POS →", Color.FromArgb(2, 132, 199), 950, (sender, e) => {
-                    // Thay MessageBox bằng cách khởi tạo và mở FrmStaffPOS
-                    FrmStaffPOS staffPos = new FrmStaffPOS();
                     this.Hide();
-                    staffPos.ShowDialog();
-                    this.Show();
+                    FrmLogin loginForm = new FrmLogin();
+                    loginForm.ShowDialog();
+                    this.Close();
                 });
             this.Controls.Add(cardPos);
 
-            //dưới
             pnlFooter = new Panel();
             pnlFooter.Dock = DockStyle.Bottom;
             pnlFooter.Height = 50;

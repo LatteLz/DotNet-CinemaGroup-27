@@ -39,6 +39,9 @@
       <Compile Update="Forms\Staff\FrmAdminUsers.cs">
         <SubType>Form</SubType>
       </Compile>
+      <Compile Update="Forms\Staff\FrmLogin.cs">
+        <SubType>Form</SubType>
+      </Compile>
     </ItemGroup>
 
 </Project>
