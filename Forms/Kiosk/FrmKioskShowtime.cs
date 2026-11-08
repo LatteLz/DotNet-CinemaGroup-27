@@ -14,6 +14,8 @@ public class FrmKioskShowtime : Form
     private FlowLayoutPanel pnlShowtimes;
     private Label lblMovieTitle;
     private Button btnBack;
+    private Button btnContinue;
+    private int _selectedShowtimeId = 0;
     
     public FrmKioskShowtime (int movieId)
     {
@@ -24,18 +26,22 @@ public class FrmKioskShowtime : Form
     private void InitializeComponent()
     {
         this.Text = "CineLuxe Kiosk - Chọn suất chiếu";
-        this.Size = new Size(500,900);
+        this.Size = new Size(390,844);
         this.StartPosition = FormStartPosition.CenterScreen;
-        this.BackColor = Color.FromArgb(18,24,38);
+        this.FormBorderStyle = FormBorderStyle.None;
+        this.BackColor = ColorTranslator.FromHtml("#101418");
         btnBack = new Button
         {
-            Text = "<- quay lại ",
-            ForeColor =  Color.White,
-            BackColor = Color.FromArgb(45,55,72),
+            Text = "← quay lại ",
+            Font = new Font("Segoe UI",9.5F,FontStyle.Bold),
+            ForeColor =  ColorTranslator.FromHtml("#94A3B8"),
+            BackColor = ColorTranslator.FromHtml("#181C20"),
             FlatStyle = FlatStyle.Flat,
-            Size = new Size(100,35),
-            Location = new Point(15,15)
+            Size = new Size(95,36),
+            Location = new Point(12,12),
+            Cursor = Cursors.Hand
         };
+        btnBack.FlatAppearance.BorderSize = 0;
         btnBack.Click += (s, e) =>
         {
             FrmKioskHome home = new FrmKioskHome();
@@ -44,15 +50,40 @@ public class FrmKioskShowtime : Form
         };
         lblMovieTitle = new Label
         {
-            Font = new Font("Segoe UI",14F, FontStyle.Bold),
-            ForeColor =  Color.White,
-            Location = new Point(130,18),
+            Font = new Font("Segoe UI", 12F, FontStyle.Bold),
+            ForeColor = ColorTranslator.FromHtml("#F59E0B"), // Amber accent
+            Location = new Point(120, 18),
             AutoSize = true,
+            MaximumSize = new Size(250, 0)
+        };
+        pnlShowtimes = new FlowLayoutPanel
+        {
+            Location = new Point(12, 60),
+            Size = new Size(366, 715),
+            AutoScroll = true,
+            Padding = new Padding(4),
+            BackColor = ColorTranslator.FromHtml("#101418")
+        };
+        btnContinue = new Button
+        {
+            Text = "TIẾP TỤC CHỌN GHẾ →",
+            Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+            ForeColor = Color.White,
+            BackColor = ColorTranslator.FromHtml("#282C31"), // Xám mờ khi chưa chọn
+            FlatStyle = FlatStyle.Flat,
+            Height = 52,
+            Dock = DockStyle.Bottom,
+            Enabled = false,
+            Cursor = Cursors.Hand
+        };
+        btnContinue.FlatAppearance.BorderSize = 0;
+        btnContinue.Click += (s, e) =>
+        {
         };
         Controls.Add(btnBack);
         Controls.Add(lblMovieTitle);
         Controls.Add(pnlShowtimes);
-        
+        Controls.Add(btnContinue);
     }
     private void LoadShowtimes()
     {
@@ -60,10 +91,10 @@ public class FrmKioskShowtime : Form
         var movies = db.Movies.FirstOrDefault(m => m.MovieId == _movieId);
         if (movies != null)
         {
-            lblMovieTitle.Text = movies.Title;
+            lblMovieTitle.Text = movies.Title.ToUpper();
         }
         var showtimes = db.Showtimes
-            .Where(s => s.MovieId == _movieId && s.StartTime >= DateTime.Now)
+            .Where(s => s.MovieId == _movieId)
             .OrderBy(s => s.StartTime)
             .ToList();
         pnlShowtimes.Controls.Clear();
@@ -71,11 +102,11 @@ public class FrmKioskShowtime : Form
         {
             Label lblEmpty = new Label
             {
-                Text = "Hiện chưa có suất chiếu tiếp theo cho phim này",
-                ForeColor =  Color.Gray,
+                Text = "Hiện chưa có suất chiếu tiếp theo cho phim này.",
+                ForeColor = ColorTranslator.FromHtml("#94A3B8"),
                 Font = new Font("Segoe UI", 10F),
                 AutoSize = true,
-                Margin =  new Padding(10),
+                Margin = new Padding(10),
             };
             pnlShowtimes.Controls.Add(lblEmpty);
             return;
@@ -85,18 +116,31 @@ public class FrmKioskShowtime : Form
         {
             Button btnTime = new Button
             {
-                Text = $"{st.StartTime:HH:mm}\nGiá: {st.TicketPrice:N0}đ",
+                Text = $"{st.StartTime:HH:mm}\nPhòng {st.RoomId}",
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold),
                 ForeColor = Color.White,
-                BackColor = Color.FromArgb(30, 41, 59),
-                Size = new Size(130, 70),
-                Margin = new Padding(8),
+                BackColor = ColorTranslator.FromHtml("#22262B"),
+                Size = new Size(110, 68),
+                Margin = new Padding(4),
                 FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                Tag = st.ShowtimeId
             };
+            btnTime.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#363C44");
             btnTime.Click += (s, e) =>
             {
-                MessageBox.Show($"Đã chọn suất chiếu {st.StartTime:HH:mm}. Chuyển sang chọn ghế!", "Thông báo");
+                foreach (Control ctrl in pnlShowtimes.Controls)
+                {
+                    if (ctrl is Button b)
+                    {
+                        b.BackColor = ColorTranslator.FromHtml("#22262B");
+                    }
+                    
+                }
+                btnTime.BackColor = ColorTranslator.FromHtml("#0284C7");
+                _selectedShowtimeId = st.ShowtimeId;
+                btnContinue.Enabled = true;
+                btnContinue.BackColor = ColorTranslator.FromHtml("#0284C7");
             };
             pnlShowtimes.Controls.Add(btnTime);
             }

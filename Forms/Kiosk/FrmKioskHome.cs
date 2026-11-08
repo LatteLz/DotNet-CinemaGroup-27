@@ -7,7 +7,7 @@ using CinemaManagement.Models;
 
 namespace CinemaManagement.Forms.Kiosk;
 
-public class FrmKioskHome : Form
+public partial class FrmKioskHome : Form
 
 {
     private FlowLayoutPanel pnlMovieList;
@@ -22,14 +22,16 @@ public class FrmKioskHome : Form
     private void InitializeComponent()
     {
         this.Text = "CineLuxe Kiosk - Trang chủ";
-        this.Size = new Size(1200, 500);
+        this.Size = new Size(390, 844);
         this.StartPosition = FormStartPosition.CenterScreen;
-        this.BackColor = Color.FromArgb(18, 24, 38);
+        this.FormBorderStyle = FormBorderStyle.None;
+        this.BackColor = ColorTranslator.FromHtml("#101418");
         lblHeader = new Label()
         {
             Text = "Đang chiếu tại rạp",
-            Font = new Font("Segoe UI", 16F, FontStyle.Bold),
+            Font = new Font("Segoe UI", 13F, FontStyle.Bold),
             ForeColor = Color.White,
+            BackColor = ColorTranslator.FromHtml("#181C20"),
             Dock = DockStyle.Top,
             Height = 60,
             TextAlign = ContentAlignment.MiddleCenter
@@ -38,10 +40,14 @@ public class FrmKioskHome : Form
         {
             Dock = DockStyle.Fill,
             AutoScroll = true,
-            Padding = new Padding(15)
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(12),
+            BackColor = ColorTranslator.FromHtml("#101418")
         };
-        Controls.Add(pnlMovieList);
-        Controls.Add(lblHeader);
+        this.Controls.Add(pnlMovieList);
+        this.Controls.Add(lblHeader);
+        pnlMovieList.BringToFront();
     }
 
     private void LoadMovies()
@@ -49,42 +55,58 @@ public class FrmKioskHome : Form
         pnlMovieList.Controls.Clear();
         using var db = new CinemaDbContext();
         var movies = db.Movies.ToList();
+        if (!movies.Any())
+        {
+            Label lblEmpty = new Label
+            {
+                Text = "Hiện chưa có dữ liệu phim.",
+                Font = new Font("Segoe UI", 10F),
+                ForeColor = ColorTranslator.FromHtml("#94A3B8"),
+                AutoSize = true,
+                Margin = new Padding(10)
+            };
+            pnlMovieList.Controls.Add(lblEmpty);
+            return;
+        }
+
         foreach (var movie in movies)
         {
             Panel card = new Panel
             {
-                Width = 440,
-                Height = 130,
-                BackColor = Color.FromArgb(30, 41, 59),
-                Margin = new Padding(0, 0, 0, 15),
+                Width = 342,
+                Height = 125,
+                BackColor = ColorTranslator.FromHtml("#181C20"),
+                Margin = new Padding(12, 0, 12, 12),
             };
             Label lblTitle = new Label
             {
                 Text = movie.Title.ToUpper(),
-                Font = new Font("Segoe UI", 12F, FontStyle.Bold),
-                ForeColor = Color.Gold,
-                Location = new Point(15, 15),
-                AutoSize = true
+                Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+                ForeColor = Color.White,
+                Location = new Point(12, 10),
+                AutoSize = true,
+                MaximumSize = new Size(320, 0)
             };
             Label lblGenre = new Label
             {
-                Text = $"Thể loại: {movie.Genre} | Thời lượng : {movie.Duration} phút ",
+                Text = $"{movie.Genre}  •  {movie.Duration} phút",
                 Font = new Font("Segoe UI", 9F),
-                ForeColor = Color.LightGray,
-                Location = new Point(15, 45),
+                ForeColor = ColorTranslator.FromHtml("#94A3B8"), 
+                Location = new Point(12, 42),
                 AutoSize = true
             };
             Button btnBook = new Button
             {
-                Text = " Đặt vé ngay",
+                Text = "ĐẶT VÉ NGAY",
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                BackColor = Color.FromArgb(180, 100, 0),
+                BackColor = ColorTranslator.FromHtml("#0284C7"),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Size = new Size(140, 38),
-                Location = new Point(285, 75),
+                Size = new Size(322, 42),
+                Location = new Point(12, 70),
                 Cursor = Cursors.Hand
             };
+            btnBook.FlatAppearance.BorderSize = 0;
             btnBook.Click += (s, e) =>
             {
                 FrmKioskShowtime frmShowtime = new FrmKioskShowtime(movie.MovieId);
