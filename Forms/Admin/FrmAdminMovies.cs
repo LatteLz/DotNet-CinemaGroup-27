@@ -433,7 +433,7 @@ namespace CinemaManagement.Forms.Admin
             {
                 poster.Controls.Add(new Label
                 {
-                    Text = title.Substring(0, 1).ToUpper(),
+                    Text = title.Length > 0 ? title.Substring(0, 1).ToUpper() : "?",
                     Dock = DockStyle.Fill,
                     TextAlign = ContentAlignment.MiddleCenter,
                     ForeColor = TxtMuted,
@@ -692,6 +692,8 @@ namespace CinemaManagement.Forms.Admin
             private ComboBox cboGenre = null!;
             private NumericUpDown numDuration = null!;
             private ComboBox cboAge = null!;
+            private TextBox txtPosterPath = null!;
+            private TextBox txtDescription = null!;
 
             public Movie Result => movie;
 
@@ -710,15 +712,15 @@ namespace CinemaManagement.Forms.Admin
                 MaximizeBox = false;
                 MinimizeBox = false;
                 StartPosition = FormStartPosition.CenterParent;
-                ClientSize = new Size(460, 330);
+                ClientSize = new Size(460, 440);
                 BackColor = BgMain;
                 Font = new Font("Segoe UI", 10F);
 
-                int y = 20;
+                int y = 16;
                 AddLabel("Tên phim *", 24, y);
                 txtTitle = new TextBox
                 {
-                    Location = new Point(24, y + 24),
+                    Location = new Point(24, y + 22),
                     Width = 412,
                     MaxLength = 200,
                     BackColor = BgSurface,
@@ -727,11 +729,11 @@ namespace CinemaManagement.Forms.Admin
                 };
                 Controls.Add(txtTitle);
 
-                y += 68;
+                y += 62;
                 AddLabel("Thể loại", 24, y);
                 cboGenre = new ComboBox
                 {
-                    Location = new Point(24, y + 24),
+                    Location = new Point(24, y + 22),
                     Width = 412,
                     DropDownStyle = ComboBoxStyle.DropDown,
                     FlatStyle = FlatStyle.Flat,
@@ -745,11 +747,11 @@ namespace CinemaManagement.Forms.Admin
                 });
                 Controls.Add(cboGenre);
 
-                y += 68;
+                y += 62;
                 AddLabel("Thời lượng (phút) *", 24, y);
                 numDuration = new NumericUpDown
                 {
-                    Location = new Point(24, y + 24),
+                    Location = new Point(24, y + 22),
                     Width = 190,
                     Minimum = 30,
                     Maximum = 400,
@@ -763,7 +765,7 @@ namespace CinemaManagement.Forms.Admin
                 AddLabel("Độ tuổi", 246, y);
                 cboAge = new ComboBox
                 {
-                    Location = new Point(246, y + 24),
+                    Location = new Point(246, y + 22),
                     Width = 190,
                     DropDownStyle = ComboBoxStyle.DropDownList,
                     FlatStyle = FlatStyle.Flat,
@@ -774,13 +776,40 @@ namespace CinemaManagement.Forms.Admin
                 cboAge.SelectedIndex = 0;
                 Controls.Add(cboAge);
 
+                y += 62;
+                AddLabel("Đường dẫn poster (PosterPath)", 24, y);
+                txtPosterPath = new TextBox
+                {
+                    Location = new Point(24, y + 22),
+                    Width = 412,
+                    MaxLength = 255,
+                    BackColor = BgSurface,
+                    ForeColor = Color.White,
+                    BorderStyle = BorderStyle.FixedSingle
+                };
+                Controls.Add(txtPosterPath);
+
+                y += 62;
+                AddLabel("Mô tả phim", 24, y);
+                txtDescription = new TextBox
+                {
+                    Location = new Point(24, y + 22),
+                    Width = 412,
+                    Height = 50,
+                    Multiline = true,
+                    BackColor = BgSurface,
+                    ForeColor = Color.White,
+                    BorderStyle = BorderStyle.FixedSingle
+                };
+                Controls.Add(txtDescription);
+
                 var btnSave = MakeButton("Lưu", 100, 36, Accent, BgMain, true, false);
-                btnSave.Location = new Point(222, 272);
+                btnSave.Location = new Point(222, 385);
                 btnSave.Click += (_, _) => Save();
                 Controls.Add(btnSave);
 
                 var btnCancel = MakeButton("Hủy", 100, 36, BgSurface, TxtSoft);
-                btnCancel.Location = new Point(336, 272);
+                btnCancel.Location = new Point(336, 385);
                 btnCancel.DialogResult = DialogResult.Cancel;
                 Controls.Add(btnCancel);
 
@@ -808,6 +837,8 @@ namespace CinemaManagement.Forms.Admin
 
                 int idx = cboAge.Items.IndexOf((movie.AgeRating ?? "P").Trim().ToUpperInvariant());
                 cboAge.SelectedIndex = idx >= 0 ? idx : 0;
+                txtPosterPath.Text = movie.PosterPath ?? "";
+                txtDescription.Text = movie.Description ?? "";
             }
 
             private void Save()
@@ -824,6 +855,8 @@ namespace CinemaManagement.Forms.Admin
                 movie.Genre = cboGenre.Text.Trim();
                 movie.Duration = (int)numDuration.Value;
                 movie.AgeRating = cboAge.Text;
+                movie.PosterPath = txtPosterPath.Text.Trim();
+                movie.Description = txtDescription.Text.Trim();
 
                 DialogResult = DialogResult.OK;
             }

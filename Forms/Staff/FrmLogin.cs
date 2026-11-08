@@ -69,7 +69,8 @@ namespace CinemaManagement.Forms.Admin
                 Text = "🎬",
                 Font = new Font("Segoe UI", 22),
                 ForeColor = COLOR_AMBER,
-                Location = new Point((pnlCard.Width - 50) / 2, 20),                Size = new Size(50, 45),
+                Location = new Point((pnlCard.Width - 50) / 2, 20),
+                Size = new Size(50, 45),
                 TextAlign = ContentAlignment.MiddleCenter
             };
 
@@ -234,7 +235,7 @@ namespace CinemaManagement.Forms.Admin
             btnQuickAdmin.FlatAppearance.BorderColor = COLOR_BORDER;
             btnQuickAdmin.Click += (s, e) => {
                 txtUsername.Text = "admin.director@cineluxe.vn";
-                txtPassword.Text = "password123";
+                txtPassword.Text = "admin123";
                 ExecuteLogin();
             };
 
@@ -252,7 +253,7 @@ namespace CinemaManagement.Forms.Admin
             btnQuickStaff.FlatAppearance.BorderColor = COLOR_BORDER;
             btnQuickStaff.Click += (s, e) => {
                 txtUsername.Text = "staff.pos@cineluxe.vn";
-                txtPassword.Text = "password123";
+                txtPassword.Text = "admin123";
                 ExecuteLogin();
             };
 
@@ -296,7 +297,7 @@ namespace CinemaManagement.Forms.Admin
                     
                     if (user.Role == "Admin")
                     {
-                        FrmAdminDashboard mainAdmin = new FrmAdminDashboard();
+                        FrmAdminMovies mainAdmin = new FrmAdminMovies();
                         mainAdmin.ShowDialog();
                     }
                     else
