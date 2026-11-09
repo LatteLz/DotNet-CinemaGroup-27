@@ -1,249 +1,180 @@
 ﻿using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace CinemaManagement.Forms.Staff
 {
     public partial class FrmAdminCombos : Form
     {
-        private readonly Color COLOR_CANVAS = ColorTranslator.FromHtml("#101418");
-        private readonly Color COLOR_PANEL_BG = ColorTranslator.FromHtml("#181C20");
-        private readonly Color COLOR_CARD_BG = ColorTranslator.FromHtml("#22262B");
-        private readonly Color COLOR_BORDER = ColorTranslator.FromHtml("#2C3238");
-        private readonly Color COLOR_PRIMARY = ColorTranslator.FromHtml("#0284C7");
-        private readonly Color COLOR_GOLD = ColorTranslator.FromHtml("#F59E0B");
-        private readonly Color COLOR_TEXT_PRIMARY = ColorTranslator.FromHtml("#FFFFFF");
-        private readonly Color COLOR_TEXT_SECONDARY = ColorTranslator.FromHtml("#94A3B8");
-        private readonly Color COLOR_TEXT_MUTED = ColorTranslator.FromHtml("#64748B");
+        private readonly Color ColorBg = ColorTranslator.FromHtml("#101418");
+        private readonly Color ColorSurfaceContainer = ColorTranslator.FromHtml("#181C20");
+        private readonly Color ColorBorder = ColorTranslator.FromHtml("#27303A");
+        private readonly Color ColorPrimaryBlue = ColorTranslator.FromHtml("#0284C7");
+        private readonly Color ColorTextWhite = ColorTranslator.FromHtml("#FFFFFF");
+        private readonly Color ColorTextMuted = ColorTranslator.FromHtml("#94A3B8");
 
-        private Panel pnlSidebar;
-        private Panel pnlTopHeader;
-        private Panel pnlRightInspector;
-        private Panel pnlFooter;
-        private Panel pnlCenter;
-        private DataGridView dgvConcessions;
+        private readonly Font FontInterBold = new Font("Segoe UI", 9F, FontStyle.Bold);
+        private readonly Font FontInterMedium = new Font("Segoe UI", 9F, FontStyle.Regular);
+        private readonly Font FontInterSmall = new Font("Segoe UI", 8F, FontStyle.Regular);
+        private readonly Font FontMono = new Font("Consolas", 8.5F, FontStyle.Regular);
 
         public FrmAdminCombos()
         {
             InitializeComponent();
-            SetupMasterLayout();
-            BuildSidebar();
-            BuildTopHeader();
-            BuildRightInspector();
-            BuildFooterBar();
-            BuildCenterContent();
+            SetupCustomUI();
+            SetupButtonEvents();
+            LoadMockData();
         }
 
-        private void SetupMasterLayout()
+        private void SetupCustomUI()
         {
-            this.Text = "CINELUXE MANAGEMENT - Quản lý kho combo bắp nước [FrmAdminCombos]";
-            this.Size = new Size(1440, 900);
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = COLOR_CANVAS;
+            this.BackColor = ColorBg;
+            this.ForeColor = ColorTextWhite;
+            this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
 
-            pnlSidebar = new Panel
-            {
-                Width = 240,
-                Dock = DockStyle.Left,
-                BackColor = COLOR_PANEL_BG,
-                Padding = new Padding(12)
-            };
+            dgvCombos.BackgroundColor = ColorBg;
+            dgvCombos.GridColor = ColorBorder;
+            dgvCombos.DefaultCellStyle.BackColor = ColorBg;
+            dgvCombos.DefaultCellStyle.ForeColor = ColorTextWhite;
+            dgvCombos.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#1E293B");
+            dgvCombos.DefaultCellStyle.SelectionForeColor = ColorPrimaryBlue;
+            dgvCombos.DefaultCellStyle.Font = FontInterMedium;
+            dgvCombos.ColumnHeadersDefaultCellStyle.BackColor = ColorSurfaceContainer;
+            dgvCombos.ColumnHeadersDefaultCellStyle.ForeColor = ColorTextMuted;
+            dgvCombos.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+            dgvCombos.RowTemplate.Height = 52;
 
-            pnlRightInspector = new Panel
-            {
-                Width = 390,
-                Dock = DockStyle.Right,
-                BackColor = COLOR_PANEL_BG,
-                Padding = new Padding(16)
-            };
-
-            pnlFooter = new Panel
-            {
-                Height = 40,
-                Dock = DockStyle.Bottom,
-                BackColor = COLOR_PANEL_BG,
-                Padding = new Padding(15, 8, 15, 8)
-            };
-
-            pnlTopHeader = new Panel
-            {
-                Height = 70,
-                Dock = DockStyle.Top,
-                BackColor = COLOR_PANEL_BG,
-                Padding = new Padding(15)
-            };
-
-            pnlCenter = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = COLOR_CANVAS,
-                Padding = new Padding(15)
-            };
-
-            this.Controls.Add(pnlCenter);
-            this.Controls.Add(pnlTopHeader);
-            this.Controls.Add(pnlFooter);
-            this.Controls.Add(pnlRightInspector);
-            this.Controls.Add(pnlSidebar);
+            dgvCombos.CellPainting += DgvCombos_CellPainting;
         }
 
-        private void BuildSidebar()
+        private void SetupButtonEvents()
         {
-            Label lblBrand = new Label
-            {
-                Text = "CINELUXE MANAGEMENT",
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
-                ForeColor = COLOR_TEXT_PRIMARY,
-                Dock = DockStyle.Top,
-                Height = 40
-            };
-
-            Label lblSection = new Label
-            {
-                Text = "PHẦN HỆ VẬN HÀNH",
-                Font = new Font("Segoe UI", 8, FontStyle.Bold),
-                ForeColor = COLOR_TEXT_MUTED,
-                Dock = DockStyle.Top,
-                Height = 25
-            };
-
-            Button btnNavPOS = CreateNavButton("Bán vé Quầy POS\nFrmStaffPOS", false);
-            Button btnNavCombo = CreateNavButton("Quản lý Combo Bắp Nước\nFrmAdminCombos", true);
-            Button btnNavReport = CreateNavButton("Tài chính & Doanh thu\nFrmAdminReports", false);
-
-            pnlSidebar.Controls.Add(btnNavReport);
-            pnlSidebar.Controls.Add(btnNavCombo);
-            pnlSidebar.Controls.Add(btnNavPOS);
-            pnlSidebar.Controls.Add(lblSection);
-            pnlSidebar.Controls.Add(lblBrand);
+            btnAddComboTop.Click += BtnAddComboTop_Click;
+            btnUpdatePrice.Click += BtnUpdatePrice_Click;
+            btnImportStore.Click += BtnImportStore_Click;
+            btnExportExcel.Click += BtnExportExcel_Click;
         }
 
-        private Button CreateNavButton(string text, bool isActive)
+        private void BtnAddComboTop_Click(object sender, EventArgs e)
         {
-            Button btn = new Button
-            {
-                Text = text,
-                Font = new Font("Segoe UI", 9f, isActive ? FontStyle.Bold : FontStyle.Regular),
-                ForeColor = isActive ? COLOR_TEXT_PRIMARY : COLOR_TEXT_SECONDARY,
-                BackColor = isActive ? COLOR_PRIMARY : Color.Transparent,
-                FlatStyle = FlatStyle.Flat,
-                Dock = DockStyle.Top,
-                Height = 48,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(8, 0, 0, 0),
-                Margin = new Padding(0, 0, 0, 4)
-            };
-            btn.FlatAppearance.BorderSize = 0;
-            return btn;
+            MessageBox.Show("Mở form thêm mới mặt hàng F&B / Combo bắp nước.", "Thêm Combo Mới", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void BuildTopHeader()
+        private void BtnUpdatePrice_Click(object sender, EventArgs e)
         {
-            Button btnAddCombo = new Button
+            if (dgvCombos.SelectedRows.Count > 0)
             {
-                Text = "+ Thêm Combo Mới (Ctrl+N)",
-                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                ForeColor = Color.Black,
-                BackColor = COLOR_GOLD,
-                Size = new Size(200, 36),
-                Location = new Point(15, 16),
-                FlatStyle = FlatStyle.Flat
-            };
-            btnAddCombo.FlatAppearance.BorderSize = 0;
-
-            pnlTopHeader.Controls.Add(btnAddCombo);
+                string sku = dgvCombos.SelectedRows[0].Cells[0].Value?.ToString() ?? "";
+                MessageBox.Show($"Mở giao diện cập nhật giá sỉ/lẻ cho mã mặt hàng: {sku}", "Cập Nhật Giá", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                MessageBox.Show("Vui lòng chọn một dòng sản phẩm trên bảng để cập nhật giá.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
-        private void BuildCenterContent()
+        private void BtnImportStore_Click(object sender, EventArgs e)
         {
-            Panel pnlTableContainer = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = COLOR_CARD_BG,
-                Padding = new Padding(10)
-            };
-
-            dgvConcessions = new DataGridView
-            {
-                Dock = DockStyle.Fill,
-                BackgroundColor = COLOR_CARD_BG,
-                BorderStyle = BorderStyle.None,
-                RowHeadersVisible = false,
-                AllowUserToAddRows = false,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect
-            };
-
-            dgvConcessions.Columns.Add("SKU", "MÃ SKU");
-            dgvConcessions.Columns.Add("Name", "TÊN MÓN / COMBO");
-            dgvConcessions.Columns.Add("Category", "PHÂN LOẠI");
-            dgvConcessions.Columns.Add("CostPrice", "GIÁ VỐN");
-            dgvConcessions.Columns.Add("SalePrice", "GIÁ NIÊM YẾT");
-
-            dgvConcessions.Rows.Add("SKU-CB-001", "Combo Couple IMAX Gold\n1 Bắp ngọt 85oz + 2 Pepsi 32oz", "Combo tiết kiệm", "38.000 đ", "145.000 đ");
-            dgvConcessions.Rows.Add("SKU-CB-002", "Combo Solo Gold\n1 Bắp mặn 64oz + 1 Coca 22oz", "Combo tiết kiệm", "24.500 đ", "95.000 đ");
-            dgvConcessions.Rows.Add("SKU-PC-003", "Bắp Phô Mai Savory 46oz\nBột phô mai nhập khẩu New Zealand", "Bắp rang bơ", "15.200 đ", "65.000 đ");
-            dgvConcessions.Rows.Add("SKU-PC-004", "Bắp Caramel Royal 64oz\nCaramel thắng nâu hạt tròn Mỹ", "Bắp rang bơ", "19.000 đ", "79.000 đ");
-            dgvConcessions.Rows.Add("SKU-DK-005", "Coca-Cola Tươi 32oz Lớn\nPost-mix CO2 tiêu chuẩn 4.2 Bar", "Nước giải khát", "6.500 đ", "39.000 đ");
-
-            dgvConcessions.DefaultCellStyle.BackColor = COLOR_CARD_BG;
-            dgvConcessions.DefaultCellStyle.ForeColor = COLOR_TEXT_PRIMARY;
-            dgvConcessions.DefaultCellStyle.Font = new Font("Segoe UI", 9);
-            dgvConcessions.ColumnHeadersDefaultCellStyle.BackColor = COLOR_PANEL_BG;
-            dgvConcessions.ColumnHeadersDefaultCellStyle.ForeColor = COLOR_TEXT_MUTED;
-            dgvConcessions.EnableHeadersVisualStyles = false;
-
-            pnlTableContainer.Controls.Add(dgvConcessions);
-            pnlCenter.Controls.Add(pnlTableContainer);
+            MessageBox.Show("Mở phân hệ Nhập kho nguyên liệu / F&B vào hệ thống.", "Nhập Kho F&B", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void BuildRightInspector()
+        private void BtnExportExcel_Click(object sender, EventArgs e)
         {
-            Label lblInspectorTitle = new Label
-            {
-                Text = "Chi tiết Mặt hàng F&B    MODE: EDIT",
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
-                ForeColor = COLOR_TEXT_PRIMARY,
-                Dock = DockStyle.Top,
-                Height = 30
-            };
-
-            Label lblSkuName = new Label
-                { Text = "Mã SKU\nSKU-CB-001", Font = new Font("JetBrains Mono", 8.5f), ForeColor = COLOR_TEXT_SECONDARY, Location = new Point(16, 80), AutoSize = true };
-
-            Label lblProdName = new Label
-                { Text = "Tên sản phẩm / Combo *\nCombo Couple IMAX Gold", Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), ForeColor = COLOR_TEXT_PRIMARY, Location = new Point(180, 80), AutoSize = true };
-
-            Button btnSave = new Button
-            {
-                Text = "Lưu thay đổi (Ctrl+S)",
-                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-                ForeColor = COLOR_TEXT_PRIMARY,
-                BackColor = COLOR_PRIMARY,
-                Dock = DockStyle.Bottom,
-                Height = 42,
-                FlatStyle = FlatStyle.Flat
-            };
-            btnSave.FlatAppearance.BorderSize = 0;
-
-            pnlRightInspector.Controls.Add(btnSave);
-            pnlRightInspector.Controls.Add(lblProdName);
-            pnlRightInspector.Controls.Add(lblSkuName);
-            pnlRightInspector.Controls.Add(lblInspectorTitle);
+            MessageBox.Show("Đã xuất dữ liệu danh mục Combo & Kho F&B ra file Excel thành công!", "Xuất Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void BuildFooterBar()
+        private void LoadMockData()
         {
-            Label lblFooterStatus = new Label
-            {
-                Text = "Tổng mặt hàng: 18 sản phẩm F&B  |  Giá trị tồn kho ước tính: 42.500.000 đ  |  Cảnh báo tồn min: 2 mặt hàng  |  SQLite Concurrency: OK (WAL Mode)",
-                Font = new Font("Segoe UI", 8.5f),
-                ForeColor = COLOR_TEXT_SECONDARY,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft
-            };
+            dgvCombos.Rows.Clear();
+            AddComboRow("SKU-CB-001", "Combo Couple IMAX Gold", "1 Bắp ngọt 85oz + 2 Pepsi 32oz", "Combo tiết kiệm", "#0F2738", "#38BDF8", "38.000 đ", "145.000 đ", "30");
+            AddComboRow("SKU-CB-002", "Combo Solo Gold", "1 Bắp mặn 64oz + 1 Coca 22oz", "Combo tiết kiệm", "#0F2738", "#38BDF8", "24.500 đ", "95.000 đ", "18");
+            AddComboRow("SKU-PC-003", "Bắp Phô Mai Savory 46oz", "Bột phô mai nhập khẩu New Zealand", "Bắp rang bơ", "#2A2012", "#FBBF24", "15.200 đ", "65.000 đ", "42");
+            AddComboRow("SKU-PC-004", "Bắp Caramel Royal 64oz", "Caramel thắng nâu hạt tròn Mỹ", "Bắp rang bơ", "#2A2012", "#FBBF24", "19.800 đ", "79.000 đ", "25");
+            AddComboRow("SKU-DK-005", "Coca-Cola Tươi 32oz Lớn", "Post-mix CO2 tiêu chuẩn 4.2 Bar", "Nước giải khát", "#0D2826", "#2DD4BF", "6.500 đ", "39.000 đ", "110");
+            AddComboRow("SKU-DK-006", "Sprite Hương Chanh 32oz", "Post-mix CO2 tiêu chuẩn 4.0 Bar", "Nước giải khát", "#0D2826", "#2DD4BF", "6.500 đ", "39.000 đ", "95");
+            AddComboRow("SKU-SN-007", "Snack Khoai Tây Nắm Truffle 110g", "Gói đóng sẵn nguyên seal nhập khẩu", "Snack đóng gói", "#221C2E", "#C084FC", "28.800 đ", "55.000 đ", "12");
+            AddComboRow("SKU-CB-008", "Combo Suite VIP Premier", "Dành riêng cho cụm rạp Gold Lounge", "Combo tiết kiệm", "#0F2738", "#38BDF8", "62.000 đ", "220.000 đ", "8");
+        }
 
-            pnlFooter.Controls.Add(lblFooterStatus);
+        private void AddComboRow(string sku, string name, string desc, string category, string badgeBgHex, string badgeFgHex, string costPrice, string listPrice, string stock)
+        {
+            dgvCombos.Rows.Add(sku, null, name + "|" + desc, category + "|" + badgeBgHex + "|" + badgeFgHex, costPrice, listPrice, stock);
+        }
+
+        private void DgvCombos_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.RowIndex < 0) return;
+
+            if (e.ColumnIndex == 0)
+            {
+                e.PaintBackground(e.CellBounds, true);
+                TextRenderer.DrawText(e.Graphics, e.Value?.ToString(), FontMono, e.CellBounds, ColorPrimaryBlue, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+                e.Handled = true;
+            }
+            else if (e.ColumnIndex == 2 && e.Value != null)
+            {
+                e.PaintBackground(e.CellBounds, true);
+                string[] parts = e.Value.ToString().Split('|');
+                if (parts.Length >= 2)
+                {
+                    Rectangle rectName = new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + 6, e.CellBounds.Width - 12, 20);
+                    Rectangle rectDesc = new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + 26, e.CellBounds.Width - 12, 18);
+
+                    TextRenderer.DrawText(e.Graphics, parts[0], FontInterBold, rectName, ColorTextWhite, TextFormatFlags.Left);
+                    TextRenderer.DrawText(e.Graphics, parts[1], FontInterSmall, rectDesc, ColorTextMuted, TextFormatFlags.Left);
+                }
+                e.Handled = true;
+            }
+            else if (e.ColumnIndex == 3 && e.Value != null)
+            {
+                e.PaintBackground(e.CellBounds, true);
+                string[] catParts = e.Value.ToString().Split('|');
+                string catName = catParts[0];
+                Color bgCol = ColorTranslator.FromHtml(catParts[1]);
+                Color fgCol = ColorTranslator.FromHtml(catParts[2]);
+
+                Size textSize = TextRenderer.MeasureText(catName, FontInterSmall);
+                Rectangle badgeRect = new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + (e.CellBounds.Height - 24) / 2, textSize.Width + 16, 24);
+
+                using (GraphicsPath path = GetRoundedRect(badgeRect, 6))
+                {
+                    using (Brush b = new SolidBrush(bgCol)) 
+                    { 
+                        e.Graphics.FillPath(b, path); 
+                    }
+                    using (Pen p = new Pen(fgCol, 1)) 
+                    { 
+                        e.Graphics.DrawPath(p, path); 
+                    }
+                }
+                TextRenderer.DrawText(e.Graphics, catName, FontInterSmall, badgeRect, fgCol, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                e.Handled = true;
+            }
+        }
+
+        private GraphicsPath GetRoundedRect(Rectangle bounds, int radius)
+        {
+            int diameter = radius * 2;
+            Size size = new Size(diameter, diameter);
+            Rectangle arc = new Rectangle(bounds.Location, size);
+            GraphicsPath path = new GraphicsPath();
+            if (radius == 0) 
+            { 
+                path.AddRectangle(bounds); 
+                return path; 
+            }
+            path.AddArc(arc, 180, 90);
+            arc.X = bounds.Right - diameter;
+
+            path.AddArc(arc, 270, 90);
+            arc.Y = bounds.Bottom - diameter;
+
+            path.AddArc(arc, 0, 90);
+            arc.X = bounds.Left;
+            path.AddArc(arc, 90, 90);
+            path.CloseFigure();
+            return path;
         }
     }
 }
