@@ -71,7 +71,16 @@ namespace CinemaManagement.Forms.Staff
             };
 
             lnkFinance.LinkClicked += (s, e) => {
-                MessageBox.Show("Mở phân hệ [FrmAdminReports - Tài chính & Doanh thu].", "Điều Hướng", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                try
+                {
+                    FrmAdminUsers usersForm = new FrmAdminUsers();
+                    usersForm.Show();
+                    this.Hide();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Không thể mở màn hình Quản lý Người dùng: " + ex.Message, "Lỗi Điều Hướng", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             };
 
             lnkOccupancy.LinkClicked += (s, e) => {
