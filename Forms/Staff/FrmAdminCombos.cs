@@ -24,6 +24,7 @@ namespace CinemaManagement.Forms.Staff
             InitializeComponent();
             SetupCustomUI();
             SetupButtonEvents();
+            AddQuickNavigationButtons();
             LoadMockData();
         }
 
@@ -46,6 +47,44 @@ namespace CinemaManagement.Forms.Staff
             dgvCombos.RowTemplate.Height = 52;
 
             dgvCombos.CellPainting += DgvCombos_CellPainting;
+        }
+
+        private void AddQuickNavigationButtons()
+        {
+            Button btnGoPos = new Button();
+            btnGoPos.Text = "🖥️ Màn Hình POS";
+            btnGoPos.Size = new Size(130, 30);
+            btnGoPos.Location = new Point(275, 12);
+            btnGoPos.BackColor = ColorTranslator.FromHtml("#1E293B");
+            btnGoPos.ForeColor = Color.White;
+            btnGoPos.FlatStyle = FlatStyle.Flat;
+            btnGoPos.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#38BDF8");
+            btnGoPos.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+            btnGoPos.Click += (s, e) => {
+                FrmStaffPOS posForm = new FrmStaffPOS();
+                posForm.Show();
+                this.Hide();
+            };
+
+            Button btnGoUsers = new Button();
+            btnGoUsers.Text = "👤 Quản Lý User";
+            btnGoUsers.Size = new Size(130, 30);
+            btnGoUsers.Location = new Point(415, 12);
+            btnGoUsers.BackColor = ColorTranslator.FromHtml("#0284C7");
+            btnGoUsers.ForeColor = Color.White;
+            btnGoUsers.FlatStyle = FlatStyle.Flat;
+            btnGoUsers.FlatAppearance.BorderSize = 0;
+            btnGoUsers.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+            btnGoUsers.Click += (s, e) => {
+                FrmAdminUsers usersForm = new FrmAdminUsers();
+                usersForm.Show();
+                this.Hide();
+            };
+
+            this.Controls.Add(btnGoPos);
+            this.Controls.Add(btnGoUsers);
+            btnGoPos.BringToFront();
+            btnGoUsers.BringToFront();
         }
 
         private void SetupButtonEvents()
@@ -166,10 +205,8 @@ namespace CinemaManagement.Forms.Staff
             }
             path.AddArc(arc, 180, 90);
             arc.X = bounds.Right - diameter;
-
             path.AddArc(arc, 270, 90);
             arc.Y = bounds.Bottom - diameter;
-
             path.AddArc(arc, 0, 90);
             arc.X = bounds.Left;
             path.AddArc(arc, 90, 90);

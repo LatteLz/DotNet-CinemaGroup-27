@@ -1,4 +1,4 @@
-﻿namespace CinemaManagement.Forms.Admin
+﻿namespace CinemaManagement.Forms.Staff
 {
     partial class FrmAdminUsers
     {
@@ -13,16 +13,19 @@
             base.Dispose(disposing);
         }
 
-        #region Windows Form Designer generated code
-
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(900, 600);
-            this.Text = "FrmAdminUsers";
-        }
+            this.SuspendLayout();
 
-        #endregion
+            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.ClientSize = new System.Drawing.Size(1440, 900);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
+            this.Name = "FrmAdminUsers";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            this.Text = "CINELUXE MANAGEMENT STUDIO - [FrmAdminUsers]";
+            this.ResumeLayout(false);
+        }
     }
 }
