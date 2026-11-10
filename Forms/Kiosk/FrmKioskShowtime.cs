@@ -100,6 +100,25 @@ public class FrmKioskShowtime : Form
             home.Show();
             this.Close();
         };
+        Button btnExit = new Button
+        {
+            Text = "✕ THOÁT",
+            Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
+            ForeColor = Color.White,
+            BackColor = ColorTranslator.FromHtml("#ef4444"),
+            FlatStyle = FlatStyle.Flat,
+            Size = new Size(100, 38),
+            Location = new Point(1785, 21),
+            Cursor = Cursors.Hand
+        };
+        btnExit.FlatAppearance.BorderSize = 0;
+        btnExit.Click += (s, e) =>
+        {
+            if (MessageBox.Show("Bạn có muốn thoát ứng dụng Ki-ốt?", "CineLuxe Kiosk", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                Application.Exit();
+            }
+        };  
         pnlHeader.Controls.Add(lblLogo);
         pnlHeader.Controls.Add(lblStep1);
         pnlHeader.Controls.Add(lblStep2);
@@ -216,6 +235,7 @@ public class FrmKioskShowtime : Form
         if (movies != null)
         {
             lblMovieTitle.Text = movies.Title.ToUpper();
+
             Label lblBadgeAge = new Label
             {
                 Text = "T16 • CẤM DƯỚI 16 TUỔI",
@@ -226,10 +246,10 @@ public class FrmKioskShowtime : Form
                 Location = new Point(24, 74),
                 AutoSize = true
             };
-           
+
             Label lblDetail = new Label
             {
-                Text = $"Thể loại: {movies.Genre}\nThời lượng: {movies.Duration} phút\nCông nghệ: IMAX LASER 4K\nĐánh giá: 8.9/10 ★",
+                Text = $"Thể loại: {movies.Genre}\nThời lượng: {movies.Duration} phút\nCông nghệ: IMAX LASER 4K\nĐánh giá: 8.8/10 ★",
                 Font = new Font("Segoe UI", 10F),
                 ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
                 Location = new Point(24, 120),
@@ -247,7 +267,7 @@ public class FrmKioskShowtime : Form
 
             Label lblDesc = new Label
             {
-                Text = "Paul Atreides tái hợp cùng Chani và tộc người Fremen khi anh tìm kiếm sự báo thù chống lại những kẻ đã hủy diệt gia tộc mình. Đứng trước sự lựa chọn giữa tình yêu và số phận vũ trụ...",
+                Text = $"Bộ phim {movies.Title} hứa hẹn mang đến trải nghiệm giải trí tuyệt vời. Quý khách vui lòng chọn khung giờ chiếu phù hợp bên phải để tiến hành chọn ghế.",
                 Font = new Font("Segoe UI", 10F),
                 ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
                 Location = new Point(24, 270),
@@ -258,7 +278,8 @@ public class FrmKioskShowtime : Form
             pnlLeftMovieInfo.Controls.Add(lblDetail);
             pnlLeftMovieInfo.Controls.Add(lblDescHeader);
             pnlLeftMovieInfo.Controls.Add(lblDesc);
-        }
+        } 
+
         var showtimes = db.Showtimes
             .Where(s => s.MovieId == _movieId)
             .OrderBy(s => s.StartTime)
