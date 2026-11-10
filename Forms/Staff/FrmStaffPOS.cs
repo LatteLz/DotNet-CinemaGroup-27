@@ -13,6 +13,9 @@ namespace CinemaManagement.Forms.Staff
         private readonly Color ColorSeatText = ColorTranslator.FromHtml("#FFFFFF");
 
         private decimal currentTotal = 314100;
+        private string selectedMovie = "Dune 2";
+        private string selectedShowtime = "19:30 • P.01";
+        private decimal ticketPrice = 110000;
 
         public FrmStaffPOS()
         {
@@ -42,7 +45,7 @@ namespace CinemaManagement.Forms.Staff
         private void LoadDefaultOrderItems()
         {
             dgvOrderItems.Rows.Clear();
-            dgvOrderItems.Rows.Add("Ghế VIP IMAX Laser (G07, G08)\nDune 2 • 19:30 • P.01", "02", "220.000 đ");
+            dgvOrderItems.Rows.Add($"Ghế VIP IMAX Laser (G07, G08)\n{selectedMovie} • {selectedShowtime}", "02", $"{(ticketPrice * 2):N0} đ");
             dgvOrderItems.Rows.Add("Combo Couple IMAX\n01 Bắp Caramel L + 02 Pepsi", "01", "129.000 đ");
             dgvOrderItems.Rows.Add("Ưu đãi Thẻ Vàng (10%)", "-", "-34.900 đ");
             dgvOrderItems.ClearSelection();
@@ -78,6 +81,10 @@ namespace CinemaManagement.Forms.Staff
             lnkAbout.LinkClicked += (s, e) => {
                 MessageBox.Show("Cineluxe Management Studio - Phiên bản .NET 8.0 WPF/WinForms Native Engine.", "Giới Thiệu", MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
+
+            lblMovie1.Click += (s, e) => SelectMovie("Dune 2", "19:30 • P.01", 110000, lblMovie1, lblMovie2, lblMovie3);
+            lblMovie2.Click += (s, e) => SelectMovie("Godzilla x Kong", "20:15 • P.03", 95000, lblMovie2, lblMovie1, lblMovie3);
+            lblMovie3.Click += (s, e) => SelectMovie("18+ Mai", "21:00 • P.04", 90000, lblMovie3, lblMovie1, lblMovie2);
 
             btnCheckout.Click += (s, e) => {
                 decimal cashGiven = ParseMoney(txtCashGiven.Text);
@@ -126,6 +133,37 @@ namespace CinemaManagement.Forms.Staff
             btnCashExact.Click += (s, e) => SetCash(currentTotal);
         }
 
+        private void SelectMovie(string movieName, string showtime, decimal price, Label activeLbl, Label other1, Label other2)
+        {
+            selectedMovie = movieName;
+            selectedShowtime = showtime;
+            ticketPrice = price;
+
+            activeLbl.BackColor = ColorTranslator.FromHtml("#304159");
+            activeLbl.ForeColor = Color.White;
+            activeLbl.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+
+            other1.BackColor = ColorTranslator.FromHtml("#181C20");
+            other1.ForeColor = ColorTranslator.FromHtml("#94A3B8");
+            other1.Font = new Font("Segoe UI", 8.5F);
+
+            other2.BackColor = ColorTranslator.FromHtml("#181C20");
+            other2.ForeColor = ColorTranslator.FromHtml("#94A3B8");
+            other2.Font = new Font("Segoe UI", 8.5F);
+
+            lblShowtime1.Text = $"SUẤT CHIẾU: {showtime}";
+
+            if (dgvOrderItems.Rows.Count > 0)
+            {
+                dgvOrderItems.Rows[0].Cells[0].Value = $"Ghế VIP IMAX Laser (G07, G08)\n{selectedMovie} • {selectedShowtime}";
+                dgvOrderItems.Rows[0].Cells[2].Value = $"{(ticketPrice * 2):N0} đ";
+            }
+
+            currentTotal = (ticketPrice * 2) + 129000 - 34900;
+            UpdateTotalDisplay();
+            MessageBox.Show($"Đã chuyển sang phim: {selectedMovie}", "Đổi Phim", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
         private void BuildDynamicSeatMap()
         {
             pnlSeatMatrix.Controls.Clear();
@@ -171,15 +209,15 @@ namespace CinemaManagement.Forms.Staff
                         {
                             btnSeat.BackColor = ColorSeatNormal;
                             btnSeat.ForeColor = ColorSeatText;
-                            currentTotal -= 110000;
+                            currentTotal -= ticketPrice;
                             lblSelectedSeats.Text = $"🟢 Đã hủy chọn ghế {seatName}";
                         }
                         else
                         {
                             btnSeat.BackColor = ColorSeatSelected;
                             btnSeat.ForeColor = Color.Black;
-                            currentTotal += 110000;
-                            dgvOrderItems.Rows.Add($"Ghế VIP IMAX Laser ({seatName})\nDune 2 • 19:30 • P.01", "01", "110.000 đ");
+                            currentTotal += ticketPrice;
+                            dgvOrderItems.Rows.Add($"Ghế VIP IMAX Laser ({seatName})\n{selectedMovie} • {selectedShowtime}", "01", $"{ticketPrice:N0} đ");
                             dgvOrderItems.ClearSelection();
                             lblSelectedSeats.Text = $"🟢 Đang chọn thêm ghế: {seatName}";
                         }
