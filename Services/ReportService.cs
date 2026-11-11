@@ -1,86 +1,94 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.EntityFrameworkCore;
-using CinemaManagement.Data;
 
 namespace CinemaManagement.Services
 {
-    public class RevenueReportDto
+    public class MovieRevenueReportDto
     {
-        public string MovieTitle { get; set; }
-        public int TotalTicketsSold { get; set; }
-        public decimal TotalRevenue { get; set; }
+        public string MovieName { get; set; }
+        public decimal TicketRevenue { get; set; }
+        public decimal ComboRevenue { get; set; }
+        public decimal TotalRevenue => TicketRevenue + ComboRevenue;
+        public int SuccessfulTransactionsCount { get; set; }
     }
 
-    public class OccupancyReportDto
+    public class ShowtimeOccupancyReportDto
     {
-        public int ShowtimeId { get; set; }
-        public string MovieTitle { get; set; }
-        public string ShowtimeInfo { get; set; }
+        public string ShowtimeId { get; set; }
+        public string MovieName { get; set; }
+        public string RoomName { get; set; }
         public int TotalSeats { get; set; }
-        public int SoldSeats { get; set; }
-        public double OccupancyRate { get; set; } 
-        public string StatusLabel { get => OccupancyRate >= 80 ? "Phim cháy vé" : (OccupancyRate < 30 ? "Phim vắng" : "Bình thường"); }
+        public int BookedSeats { get; set; }
+        public double OccupancyRate => TotalSeats > 0 ? ((double)BookedSeats / TotalSeats) * 100 : 0;
+        public string PerformanceStatus => OccupancyRate >= 85 ? "🔥 Phim cháy vé" : (OccupancyRate < 30 ? "⚠️ Phim vắng" : "Ổn định");
+    }
+
+    public class TransactionModel
+    {
+        public string TransactionId { get; set; }
+        public string MovieName { get; set; }
+        public string Status { get; set; }
+        public decimal TicketAmount { get; set; }
+        public decimal ComboAmount { get; set; }
+    }
+
+    public class ShowtimeModel
+    {
+        public string ShowtimeId { get; set; }
+        public string MovieName { get; set; }
+        public string RoomName { get; set; }
+        public int TotalSeats { get; set; }
+        public int BookedSeats { get; set; }
     }
 
     public class ReportService
     {
-        public List<RevenueReportDto> GetRevenueByMovie()
+        private readonly List<TransactionModel> _transactions;
+        private readonly List<ShowtimeModel> _showtimes;
+
+        public ReportService(List<TransactionModel> transactions, List<ShowtimeModel> showtimes)
         {
-            using var context = new CinemaDbContext();
-
-            // Giả định Booking có liên kết với Movie và Payment thành công
-            var report = context.Bookings
-                .Where(b => b.Payments.Any(p => p.Status == "Success"))
-                .GroupBy(b => b.MovieTitle)
-                .Select(g => new RevenueReportDto
-                {
-                    MovieTitle = g.Key,
-                    TotalTicketsSold = g.Count(),
-                    TotalRevenue = g.Sum(b => b.TotalAmount)
-                })
-                .ToList();
-
-            return report;
+            _transactions = transactions ?? new List<TransactionModel>();
+            _showtimes = showtimes ?? new List<ShowtimeModel>();
         }
 
-        /// <summary>
-        /// Thống kê tỷ lệ lấp đầy theo suất chiếu
-        /// Công thức: Số vé đã bán ÷ tổng số ghế của phòng × 100%
-        /// </summary>
-        public List<OccupancyReportDto> GetOccupancyRateReport()
+        public List<MovieRevenueReportDto> GetRevenueByMovie()
         {
-            using var context = new CinemaDbContext();
-            var showtimes = context.Showtimes
-                .Include(s => s.Movie)
-                .Include(s => s.Room)
-                .ThenInclude(r => r.Seats)
-                .ToList();
-
-            var result = new List<OccupancyReportDto>();
-
-            foreach (var st in showtimes)
-            {
-                int totalSeats = st.Room?.Seats?.Count ?? 0;
-
-                // Đếm số vé đã bán dựa theo ShowtimeId (mỗi vé trong bảng Ticket ứng với 1 ghế đã bán)
-                int soldSeats = context.Tickets.Count(t => t.ShowtimeId == st.ShowtimeId);
-
-                double rate = totalSeats > 0 ? Math.Round((double)soldSeats / totalSeats * 100, 2) : 0;
-
-                result.Add(new OccupancyReportDto
+            return _transactions
+                .Where(t => t.Status == "SUCCESS")
+                .GroupBy(t => t.MovieName)
+                .Select(g => new MovieRevenueReportDto
                 {
-                    ShowtimeId = st.ShowtimeId, // Sử dụng ShowtimeId khớp với Model
-                    MovieTitle = st.Movie?.Title ?? "N/A",
-                    ShowtimeInfo = st.StartTime.ToString("dd/MM/yyyy HH:mm"), // Sửa lại cú pháp ToString chuẩn
-                    TotalSeats = totalSeats,
-                    SoldSeats = soldSeats,
-                    OccupancyRate = rate
-                });
-            }
+                    MovieName = g.Key,
+                    TicketRevenue = g.Sum(t => t.TicketAmount),
+                    ComboRevenue = g.Sum(t => t.ComboAmount),
+                    SuccessfulTransactionsCount = g.Count()
+                })
+                .OrderByDescending(r => r.TotalRevenue)
+                .ToList();
+        }
 
-            return result;
+        public List<ShowtimeOccupancyReportDto> GetShowtimeOccupancyAndStatus()
+        {
+            return _showtimes
+                .Select(s => new ShowtimeOccupancyReportDto
+                {
+                    ShowtimeId = s.ShowtimeId,
+                    MovieName = s.MovieName,
+                    RoomName = s.RoomName,
+                    TotalSeats = s.TotalSeats,
+                    BookedSeats = s.BookedSeats
+                })
+                .OrderByDescending(o => o.OccupancyRate)
+                .ToList();
+        }
+
+        public List<ShowtimeOccupancyReportDto> GetHotOrColdMovies()
+        {
+            return GetShowtimeOccupancyAndStatus()
+                .Where(o => o.OccupancyRate >= 85 || o.OccupancyRate < 30)
+                .ToList();
         }
     }
 }
