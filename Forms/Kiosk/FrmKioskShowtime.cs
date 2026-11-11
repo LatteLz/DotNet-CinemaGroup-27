@@ -7,6 +7,7 @@ using CinemaManagement.Models;
 using Timer = System.Windows.Forms.Timer;
 using System.IO;
 using System.Globalization;
+using Microsoft.EntityFrameworkCore;
 namespace CinemaManagement.Forms.Kiosk;
 
 public class FrmKioskShowtime : Form
@@ -33,6 +34,26 @@ public class FrmKioskShowtime : Form
         LoadShowtimes();
         LoadMovieLeftInfo();
         RenderDateTabs();
+        }
+        private void FilterShowtimes(string format)
+        {
+            using var db = new CinemaManagement.Data.CinemaDbContext();
+            var query = db.Showtimes
+                .Include(st => st.Room)
+                .Where(st => st.MovieId == _movieId && st.StartTime.Date == _selectedDate.Date);
+
+            if (format == "IMAX")
+            {
+                query = query.Where(st => st.Room != null && st.Room.RoomName.Contains("IMAX"));
+            }
+            else if (format == "Standard")
+            {
+                query = query.Where(st => st.Room == null || !st.Room.RoomName.Contains("IMAX"));
+            }
+
+            var filteredShowtimes = query.ToList();
+            LoadShowtimes();
+            
     }
     private void InitializeComponent()
     {

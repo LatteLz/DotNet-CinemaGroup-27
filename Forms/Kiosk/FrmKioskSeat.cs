@@ -11,15 +11,15 @@ namespace CinemaManagement.Forms.Kiosk;
 public class FrmKioskSeat : Form
 {
     private int _showtimeId;
+    private int _movieId;
     private decimal _seatPrice = 160000m;
     private List<string> _selectedSeats = new List<string>();
-
+    private Controls.SeatMapControl _seatMapControl;
     private Panel pnlHeader;
     private Panel pnlLeftInfo;
     private Panel pnlScreenArea;
     private FlowLayoutPanel pnlSeatGrid;
     private Panel pnlBottomBar;
-
     private Label lblClock;
     private Label lblMovieTitle;
     private Label lblShowtimeInfo;
@@ -34,6 +34,30 @@ public class FrmKioskSeat : Form
         InitializeComponent();
         LoadShowtimeDetails();
         RenderSeatMap();
+        InitSeatMapControl();
+    }
+    private void InitSeatMapControl()
+    {
+        _seatMapControl = new Controls.SeatMapControl
+        {
+            Location = new Point(50, 140),
+            Size =new Size(1100, 580)
+        };
+        _seatMapControl.OnSeatSelectionChanged += (selectedSeats) =>
+        {
+            _selectedSeats = selectedSeats;
+            UpdateTotalPriceDisplay();
+        };
+
+        this.Controls.Add(_seatMapControl);
+        _seatMapControl.LoadSeatMap(_showtimeId);
+    }
+    private void UpdateTotalPriceDisplay()
+    {
+        decimal total = _selectedSeats.Count * _seatPrice;
+        lblTotalPrice.Text = $"{total:N0} VNĐ";
+        if (lblSelectedSeats != null)
+            lblSelectedSeats.Text = $"Đã chọn: {_selectedSeats.Count} ghế";
     }
     private void InitializeComponent()
     {
@@ -107,8 +131,32 @@ public class FrmKioskSeat : Form
         btnBack.FlatAppearance.BorderSize = 0;
         btnBack.Click += (s, e) =>
         {
+            FrmKioskShowtime frmShowtime = new FrmKioskShowtime(_movieId);
+            frmShowtime.Show();
             this.Close();
-            };
+        };
+        pnlBottomBar.Controls.Add(lblSelectedSeats);
+        pnlBottomBar.Controls.Add(lblTotalPrice);
+        pnlBottomBar.Controls.Add(btnContinuePayment);
+
+        this.Controls.Add(pnlHeader);
+        this.Controls.Add(pnlLeftInfo);
+        this.Controls.Add(pnlScreenArea);
+        if (_seatMapControl != null)
+        {
+            this.Controls.Add(_seatMapControl);
+        }
+
+        this.Controls.Add(pnlBottomBar);
+        this.ResumeLayout(false);
+
+        _timer = new System.Windows.Forms.Timer { Interval = 1000 };
+        _timer.Tick += (s, e) =>
+        {
+            if (lblClock != null && !lblClock.IsDisposed)
+                lblClock.Text = DateTime.Now.ToString("HH:mm:ss");
+        };
+        _timer.Start();
         Button btnExit = new Button
         {
             Text = "✕ THOÁT",
@@ -263,9 +311,16 @@ public class FrmKioskSeat : Form
                 else
                 {
                     MessageBox.Show("Rất tiếc, một số ghế bạn chọn vừa bị giữ bởi khách hàng khác. Vui lòng chọn ghế khác!", "CineLuxe Kiosk", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _seatMapControl?.LoadSeatMap(_showtimeId);
                 }
+                
+                }
+            else
+            {
+                MessageBox.Show("Vui lòng chọn ít nhất 1 ghế trước khi tiếp tục!", "CineLuxe Kiosk", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         };
+        
         pnlBottomBar.Controls.Add(lblSelectedSeats);
         pnlBottomBar.Controls.Add(lblTotalPrice);
         pnlBottomBar.Controls.Add(btnContinuePayment);
