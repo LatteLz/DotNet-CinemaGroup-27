@@ -240,11 +240,26 @@ public class FrmKioskShowtime : Form
             BackColor = ColorTranslator.FromHtml("#262a2f")
         };
         var posterProperty = movie.GetType().GetProperty("PosterUrl") ?? movie.GetType().GetProperty("ImagePath");
-        string posterPath = posterProperty?.GetValue(movie)?.ToString();
+        string relativePath = movie.PosterPath ?? "";
 
-        if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
+        if (!string.IsNullOrEmpty(relativePath))
         {
-            try { picLeftPoster.Image = Image.FromFile(posterPath); } catch { }
+            string cleanPath = relativePath.TrimStart('/', '\\');
+            string fullPath = Path.Combine(Application.StartupPath, cleanPath);
+    
+            if (!File.Exists(fullPath))
+            {
+                fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", cleanPath);
+            }
+
+            if (File.Exists(fullPath))
+            {
+                try 
+                { 
+                    picLeftPoster.Image = Image.FromFile(fullPath); 
+                } 
+                catch { }
+            }
         }
         var ageRatingProp = movie.GetType().GetProperty("AgeRating") ?? movie.GetType().GetProperty("Rating");
         string ageRating = ageRatingProp?.GetValue(movie)?.ToString() ?? "T16";
