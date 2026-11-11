@@ -201,7 +201,12 @@ public class FrmKioskShowtime : Form
         btnContinue.FlatAppearance.BorderSize = 0;
         btnContinue.Click += (s, e) =>
         {
-            MessageBox.Show($"Xác nhận chọn Suất chiếu ID: {_selectedShowtimeId}. Chuẩn bị sang Màn hình Chọn Ghế!", "CineLuxe Kiosk");
+            if (_selectedShowtimeId > 0)
+            {
+                FrmKioskSeat frmSeat = new FrmKioskSeat(_selectedShowtimeId);
+                frmSeat.Show();
+                this.Hide();
+            }
         };
         pnlBottomBar.Controls.Add(lblSelectedShowtimeSummary);
         pnlBottomBar.Controls.Add(btnContinue);
