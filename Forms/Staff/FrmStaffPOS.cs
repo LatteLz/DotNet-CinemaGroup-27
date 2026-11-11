@@ -4,6 +4,8 @@ using System.Data.SQLite;
 using System.Drawing;
 using System.Globalization;
 using System.Windows.Forms;
+using CinemaManagement.Data;
+using CinemaManagement.Models;
 
 namespace CinemaManagement.Forms.Staff
 {
@@ -29,7 +31,7 @@ namespace CinemaManagement.Forms.Staff
         private List<ShowtimeDetail> dbShowtimes = new List<ShowtimeDetail>();
         private Dictionary<string, SeatDetail> dbSeats = new Dictionary<string, SeatDetail>();
         private List<ComboDetail> dbCombos = new List<ComboDetail>();
-        
+
         private List<string> selectedSeats = new List<string>();
         private List<ComboDetail> selectedCombos = new List<ComboDetail>();
 
@@ -85,7 +87,7 @@ namespace CinemaManagement.Forms.Staff
             LoadShowtimesFromDatabase();
             LoadSeatsFromDatabase();
             LoadCombosFromDatabase();
-            
+
             BuildDynamicMovieCatalog();
             BuildDynamicShowtimeCatalog();
             BuildDynamicSeatMap();
@@ -98,7 +100,9 @@ namespace CinemaManagement.Forms.Staff
         {
             this.BackColor = ColorBg;
             this.ForeColor = Color.White;
-            this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            this.SetStyle(
+                ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer,
+                true);
 
             dgvOrderItems.BackgroundColor = ColorSurface;
             dgvOrderItems.DefaultCellStyle.BackColor = ColorSurface;
@@ -141,13 +145,16 @@ namespace CinemaManagement.Forms.Staff
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi kết nối CSDL Phim: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Lỗi kết nối CSDL Phim: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
 
             if (dbMovies.Count == 0)
             {
-                dbMovies.Add(new MovieDetail { MovieId = 1, Title = "Dune: Part Two", Duration = "166", Genre = "Sci-Fi", AgeRating = "T16" });
-                dbMovies.Add(new MovieDetail { MovieId = 2, Title = "Godzilla x Kong", Duration = "115", Genre = "Action", AgeRating = "T13" });
+                dbMovies.Add(new MovieDetail
+                    { MovieId = 1, Title = "Dune: Part Two", Duration = "166", Genre = "Sci-Fi", AgeRating = "T16" });
+                dbMovies.Add(new MovieDetail
+                    { MovieId = 2, Title = "Godzilla x Kong", Duration = "115", Genre = "Action", AgeRating = "T13" });
             }
 
             if (dbMovies.Count > 0)
@@ -189,13 +196,22 @@ namespace CinemaManagement.Forms.Staff
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi kết nối CSDL Suất Chiếu: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Lỗi kết nối CSDL Suất Chiếu: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
 
             if (dbShowtimes.Count == 0)
             {
-                dbShowtimes.Add(new ShowtimeDetail { ShowtimeId = 101, MovieId = 1, RoomId = 1, StartTime = "19:30", RoomName = "IMAX Laser", Price = 160000 });
-                dbShowtimes.Add(new ShowtimeDetail { ShowtimeId = 102, MovieId = 1, RoomId = 2, StartTime = "21:15", RoomName = "Phòng 02", Price = 120000 });
+                dbShowtimes.Add(new ShowtimeDetail
+                {
+                    ShowtimeId = 101, MovieId = 1, RoomId = 1, StartTime = "19:30", RoomName = "IMAX Laser",
+                    Price = 160000
+                });
+                dbShowtimes.Add(new ShowtimeDetail
+                {
+                    ShowtimeId = 102, MovieId = 1, RoomId = 2, StartTime = "21:15", RoomName = "Phòng 02",
+                    Price = 120000
+                });
             }
 
             UpdateActiveShowtimeForSelectedMovie();
@@ -341,7 +357,8 @@ namespace CinemaManagement.Forms.Staff
                 pnlCard.Controls.Add(lblSub);
 
                 var targetMovie = movie;
-                EventHandler clickHandler = (s, e) => {
+                EventHandler clickHandler = (s, e) =>
+                {
                     selectedMovie = targetMovie.Title;
                     UpdateActiveShowtimeForSelectedMovie();
                     BuildDynamicMovieCatalog();
@@ -395,7 +412,8 @@ namespace CinemaManagement.Forms.Staff
                 btnShow.FlatAppearance.BorderColor = isSelected ? Color.White : ColorTranslator.FromHtml("#1e242a");
 
                 var targetShow = show;
-                btnShow.Click += (s, e) => {
+                btnShow.Click += (s, e) =>
+                {
                     selectedShowtime = $"{targetShow.StartTime} • P.{targetShow.RoomId:D2} [{targetShow.RoomName}]";
                     selectedTicketPrice = targetShow.Price;
                     BuildDynamicShowtimeCatalog();
@@ -454,7 +472,8 @@ namespace CinemaManagement.Forms.Staff
                 pnlCBox.Controls.Add(lblCDesc);
 
                 var targetCombo = combo;
-                EventHandler comboClick = (s, e) => {
+                EventHandler comboClick = (s, e) =>
+                {
                     if (selectedCombos.Contains(targetCombo)) selectedCombos.Remove(targetCombo);
                     else selectedCombos.Add(targetCombo);
                     BuildDynamicComboCatalog();
@@ -484,13 +503,19 @@ namespace CinemaManagement.Forms.Staff
                     if (dbSeats.ContainsKey(seat)) ticketsTotal += dbSeats[seat].Price;
                     else ticketsTotal += selectedTicketPrice;
                 }
-                dgvOrderItems.Rows.Add(new object[] { $"{selectedMovie}\nGhế: {seatsStr} ({selectedShowtime})", selectedSeats.Count.ToString("D2"), $"{ticketsTotal:N0} đ" });
+
+                dgvOrderItems.Rows.Add(new object[]
+                {
+                    $"{selectedMovie}\nGhế: {seatsStr} ({selectedShowtime})", selectedSeats.Count.ToString("D2"),
+                    $"{ticketsTotal:N0} đ"
+                });
             }
 
             foreach (var combo in selectedCombos)
             {
                 combosTotal += combo.Price;
-                dgvOrderItems.Rows.Add(new object[] { $"{combo.Name}\n{combo.Description}", "01", $"{combo.Price:N0} đ" });
+                dgvOrderItems.Rows.Add(new object[]
+                    { $"{combo.Name}\n{combo.Description}", "01", $"{combo.Price:N0} đ" });
             }
 
             dgvOrderItems.ClearSelection();
@@ -500,34 +525,48 @@ namespace CinemaManagement.Forms.Staff
 
         private void SetupEvents()
         {
-            lnkPos.LinkClicked += (s, e) => {
-                MessageBox.Show($"Bạn đang ở màn hình Bán vé Quầy POS. (Thu ngân: {loggedInUserName})", "Thông Báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            lnkPos.LinkClicked += (s, e) =>
+            {
+                MessageBox.Show($"Bạn đang ở màn hình Bán vé Quầy POS. (Thu ngân: {loggedInUserName})", "Thông Báo",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
 
-            lnkCombo.LinkClicked += (s, e) => {
+            lnkCombo.LinkClicked += (s, e) =>
+            {
                 FrmAdminCombos adminComboForm = new FrmAdminCombos();
                 adminComboForm.Show();
                 this.Hide();
             };
 
-            lnkUsers.LinkClicked += (s, e) => {
+            lnkUsers.LinkClicked += (s, e) =>
+            {
                 FrmAdminUsers usersForm = new FrmAdminUsers();
                 usersForm.Show();
                 this.Hide();
             };
 
-            btnCheckout.Click += (s, e) => {
+            btnCheckout.Click += (s, e) =>
+            {
                 decimal cashGiven = ParseMoney(txtCashGiven.Text);
                 if (cashGiven < currentTotal)
                 {
-                    MessageBox.Show("Tiền khách đưa chưa đủ để thanh toán!", "Lỗi Thanh Toán", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("Tiền khách đưa chưa đủ để thanh toán!", "Lỗi Thanh Toán", MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
                     return;
                 }
+
                 SaveTransactionToDatabase(currentTotal, cashGiven);
-                MessageBox.Show("Đã thanh toán và lưu giao dịch thành công vào cơ sở dữ liệu!", "Hoàn Tất", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Đã thanh toán và lưu giao dịch thành công vào cơ sở dữ liệu!", "Hoàn Tất",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                selectedSeats.Clear();
+                selectedCombos.Clear();
+                UpdateOrderItems();
+                BuildDynamicSeatMap();
+                BuildDynamicComboCatalog();
             };
 
-            btnCancelOrder.Click += (s, e) => {
+            btnCancelOrder.Click += (s, e) =>
+            {
                 selectedSeats.Clear();
                 selectedCombos.Clear();
                 UpdateOrderItems();
@@ -541,25 +580,38 @@ namespace CinemaManagement.Forms.Staff
         private void SaveTransactionToDatabase(decimal totalAmount, decimal cashGiven)
         {
             decimal changeReturned = cashGiven - totalAmount;
-            string query = "INSERT INTO Payments (BookingId, Amount, CashGiven, ChangeReturned, PaymentMethod, Status, PaymentDate) VALUES (1, @total, @cash, @change, 'CASH', 'SUCCESS', @date);";
+
             try
             {
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
+                using (var db = new CinemaDbContext())
                 {
-                    conn.Open();
-                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
+                    var booking = new Booking
                     {
-                        cmd.Parameters.AddWithValue("@total", totalAmount);
-                        cmd.Parameters.AddWithValue("@cash", cashGiven);
-                        cmd.Parameters.AddWithValue("@change", changeReturned < 0 ? 0 : changeReturned);
-                        cmd.Parameters.AddWithValue("@date", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-                        cmd.ExecuteNonQuery();
-                    }
+                        MovieTitle = selectedMovie,
+                        ShowtimeInfo = selectedShowtime,
+                        TotalAmount = totalAmount,
+                        CreatedAt = DateTime.Now
+                    };
+                    db.Bookings.Add(booking);
+                    db.SaveChanges();
+                    var payment = new Payment
+                    {
+                        BookingId = booking.Id,
+                        Amount = totalAmount,
+                        CashGiven = cashGiven,
+                        ChangeReturned = changeReturned < 0 ? 0 : changeReturned,
+                        PaymentMethod = "CASH",
+                        Status = "SUCCESS",
+                        PaymentDate = DateTime.Now
+                    };
+                    db.Payments.Add(payment);
+                    db.SaveChanges();
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi ghi nhận giao dịch vào cơ sở dữ liệu: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Lỗi ghi nhận giao dịch vào CSDL: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 
@@ -612,7 +664,8 @@ namespace CinemaManagement.Forms.Staff
                         btnSeat.ForeColor = ColorSeatText;
                     }
 
-                    btnSeat.Click += (s, e) => {
+                    btnSeat.Click += (s, e) =>
+                    {
                         if (selectedSeats.Contains(seatName))
                         {
                             selectedSeats.Remove(seatName);
@@ -625,11 +678,13 @@ namespace CinemaManagement.Forms.Staff
                             btnSeat.BackColor = ColorSeatSelected;
                             btnSeat.ForeColor = Color.Black;
                         }
+
                         UpdateOrderItems();
                     };
 
                     pnlSeatMatrix.Controls.Add(btnSeat);
                 }
+
                 startY += 32;
             }
         }
@@ -639,7 +694,7 @@ namespace CinemaManagement.Forms.Staff
             lblTotalAmount.Text = $"{currentTotal:N0} đ";
             decimal cashGiven = ParseMoney(txtCashGiven.Text);
             decimal change = cashGiven - currentTotal;
-            
+
             if (change >= 0)
             {
                 lblChangeDue.Text = $"TIỀN THỐI LẠI (CHANGE DUE): {change:N0} đ";
