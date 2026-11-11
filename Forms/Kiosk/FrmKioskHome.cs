@@ -4,7 +4,7 @@ using System.Linq;
 using System.Windows.Forms;
 using CinemaManagement.Data;
 using CinemaManagement.Models;
-
+using System.IO;
 namespace CinemaManagement.Forms.Kiosk;
 
 public partial class FrmKioskHome : Form
@@ -54,7 +54,7 @@ public partial class FrmKioskHome : Form
             ForeColor = Color.White,
             BackColor = ColorTranslator.FromHtml("#1a5276"),
             Padding = new Padding(16, 8, 16, 8),
-            Location = new Point(650, 20),
+            Location = new Point(600, 20),
             AutoSize = true
         };
 
@@ -63,7 +63,7 @@ public partial class FrmKioskHome : Form
             Text = "2. Chọn Ghế",
             Font = new Font("Segoe UI", 11F, FontStyle.Regular),
             ForeColor = ColorTranslator.FromHtml("#8b9198"),
-            Location = new Point(800, 28),
+            Location = new Point(780, 28),
             AutoSize = true
         };
 
@@ -72,7 +72,7 @@ public partial class FrmKioskHome : Form
             Text = DateTime.Now.ToString("HH:mm:ss"),
             Font = new Font("Segoe UI", 12F, FontStyle.Bold),
             ForeColor = ColorTranslator.FromHtml("#ffb961"), 
-            Location = new Point(1650, 26),
+            Location = new Point(1540, 26),
             AutoSize = true
         };
 
@@ -84,7 +84,7 @@ public partial class FrmKioskHome : Form
             BackColor = ColorTranslator.FromHtml("#6f4400"),
             FlatStyle = FlatStyle.Flat,
             Size = new Size(100, 36),
-            Location = new Point(1780, 22),
+            Location = new Point(1670, 22),
             Cursor = Cursors.Hand
         };
         btnHelp.FlatAppearance.BorderSize = 0;
@@ -102,10 +102,12 @@ public partial class FrmKioskHome : Form
         btnExit.FlatAppearance.BorderSize = 0;
         btnExit.Click += (s, e) =>
         {
-            if (MessageBox.Show("Bạn có muốn thoát ứng dụng Ki-ốt?", "CineLuxe Kiosk", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            Form mainForm = Application.OpenForms.Cast<Form>().FirstOrDefault(f => f.Name == "FrmMain" || f.Name == "FrmRoleSelection" || f.Tag?.ToString() == "Main");
+            if (mainForm != null)
             {
-                Application.Exit();
+                mainForm.Show();
             }
+            this.Close();
         };
 
         pnlHeader.Controls.Add(lblHeader);
@@ -113,6 +115,7 @@ public partial class FrmKioskHome : Form
         pnlHeader.Controls.Add(lblStep2);
         pnlHeader.Controls.Add(lblClock);
         pnlHeader.Controls.Add(btnHelp);
+        pnlHeader.Controls.Add(btnExit);
         
         pnlFilterBar = new Panel
         {
@@ -206,6 +209,12 @@ private void LoadMovies()
             SizeMode = PictureBoxSizeMode.Zoom,
             BackColor = ColorTranslator.FromHtml("#262a2f")
         };
+        var posterProp = movie.GetType().GetProperty("PosterUrl") ?? movie.GetType().GetProperty("ImagePath");
+        string posterPath = posterProp?.GetValue(movie)?.ToString();
+        if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
+        {
+            try { picPoster.Image = Image.FromFile(posterPath); } catch { }
+        }
 
         Label lblTitle = new Label
         {
@@ -216,8 +225,7 @@ private void LoadMovies()
             AutoSize = true,
             MaximumSize = new Size(270, 0)
         };
-
-        // Đã sửa lỗi nối chuỗi xuống dòng hợp lệ
+        
         Label lblGenre = new Label
         {
             Text = $"{movie.Genre}\n{movie.Duration} phút",
@@ -226,10 +234,11 @@ private void LoadMovies()
             Location = new Point(160, 70),
             AutoSize = true
         };
-
+        var ageProp = movie.GetType().GetProperty("AgeRating") ?? movie.GetType().GetProperty("Rating");
+        string ageRating = ageProp?.GetValue(movie)?.ToString() ?? "T16";
         Label lblRating = new Label
         {
-            Text = "T16 • 8.8 ★",
+            Text = $"{ageRating} • 8.8 ★",
             Font = new Font("Segoe UI", 9F, FontStyle.Bold),
             ForeColor = ColorTranslator.FromHtml("#ffb961"),
             Location = new Point(160, 125),
