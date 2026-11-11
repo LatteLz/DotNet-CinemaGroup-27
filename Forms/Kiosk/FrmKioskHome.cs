@@ -208,14 +208,28 @@ private void LoadMovies()
             Location = new Point(16, 16),
             SizeMode = PictureBoxSizeMode.Zoom,
             BackColor = ColorTranslator.FromHtml("#262a2f")
-        };
-        var posterProp = movie.GetType().GetProperty("PosterUrl") ?? movie.GetType().GetProperty("ImagePath");
-        string posterPath = posterProp?.GetValue(movie)?.ToString();
-        if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
+        };string relativePath = movie.PosterPath ?? "";
+        if (!string.IsNullOrEmpty(relativePath))
         {
-            try { picPoster.Image = Image.FromFile(posterPath); } catch { }
-        }
+            string cleanPath = relativePath.TrimStart('\\', '/');
+            string path1 = Path.Combine(Application.StartupPath, cleanPath);
+            string path2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", cleanPath);
+            string path3 = Path.Combine(Directory.GetCurrentDirectory(), cleanPath);
 
+            string finalPath = File.Exists(path1) ? path1 : (File.Exists(path2) ? path2 : (File.Exists(path3) ? path3 : ""));
+
+            if (!string.IsNullOrEmpty(finalPath))
+            {
+                try 
+                { 
+                    using (var stream = new FileStream(finalPath, FileMode.Open, FileAccess.Read))
+                    {
+                        picPoster.Image = Image.FromStream(stream);
+                    }
+                } 
+                catch { }
+            }
+        }
         Label lblTitle = new Label
         {
             Text = movie.Title.ToUpper(),
