@@ -5,7 +5,8 @@ using System.Windows.Forms;
 using CinemaManagement.Data;
 using CinemaManagement.Models;
 using Timer = System.Windows.Forms.Timer;
-
+using System.IO;
+using System.Globalization;
 namespace CinemaManagement.Forms.Kiosk;
 
 public class FrmKioskShowtime : Form
@@ -24,12 +25,14 @@ public class FrmKioskShowtime : Form
     private Label lblSelectedShowtimeSummary;
     private Label lblClock;
     private System.Windows.Forms.Timer _timer;
-    
+    private DateTime _selectedDate = DateTime.Today;
     public FrmKioskShowtime (int movieId)
     {
         _movieId = movieId;
         InitializeComponent();
         LoadShowtimes();
+        LoadMovieLeftInfo();
+        RenderDateTabs();
     }
     private void InitializeComponent()
     {
@@ -59,7 +62,7 @@ public class FrmKioskShowtime : Form
             Text = "1. Chọn Phim",
             Font = new Font("Segoe UI", 11F),
             ForeColor = ColorTranslator.FromHtml("#8b9198"),
-            Location = new Point(650, 28),
+            Location = new Point(600, 28),
             AutoSize = true
         };
 
@@ -70,7 +73,7 @@ public class FrmKioskShowtime : Form
             ForeColor = Color.White,
             BackColor = ColorTranslator.FromHtml("#1a5276"),
             Padding = new Padding(16, 8, 16, 8),
-            Location = new Point(780, 20),
+            Location = new Point(760, 20),
             AutoSize = true
         };
 
@@ -79,7 +82,7 @@ public class FrmKioskShowtime : Form
             Text = DateTime.Now.ToString("HH:mm:ss"),
             Font = new Font("Segoe UI", 12F, FontStyle.Bold),
             ForeColor = ColorTranslator.FromHtml("#ffb961"),
-            Location = new Point(1650, 26),
+            Location = new Point(1530, 26),
             AutoSize = true
         };
         btnBack = new Button
@@ -90,7 +93,7 @@ public class FrmKioskShowtime : Form
             BackColor = ColorTranslator.FromHtml("#262a2f"),
             FlatStyle = FlatStyle.Flat,
             Size = new Size(110,38),
-            Location = new Point(1780,21),
+            Location = new Point(1660,21),
             Cursor = Cursors.Hand
         };
         btnBack.FlatAppearance.BorderSize = 0;
@@ -108,22 +111,26 @@ public class FrmKioskShowtime : Form
             BackColor = ColorTranslator.FromHtml("#ef4444"),
             FlatStyle = FlatStyle.Flat,
             Size = new Size(100, 38),
-            Location = new Point(1785, 21),
+            Location = new Point(1780, 21),
             Cursor = Cursors.Hand
         };
         btnExit.FlatAppearance.BorderSize = 0;
         btnExit.Click += (s, e) =>
         {
-            if (MessageBox.Show("Bạn có muốn thoát ứng dụng Ki-ốt?", "CineLuxe Kiosk", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            Form mainForm = Application.OpenForms.Cast<Form>().FirstOrDefault(f => f.Name == "FrmMain" || f.Name == "FrmRoleSelection" || f.Tag?.ToString() == "Main");
+            if (mainForm != null)
             {
-                Application.Exit();
+                mainForm.Show();
             }
-        };  
+            this.Close();
+        }; 
         pnlHeader.Controls.Add(lblLogo);
         pnlHeader.Controls.Add(lblStep1);
         pnlHeader.Controls.Add(lblStep2);
         pnlHeader.Controls.Add(lblClock);
         pnlHeader.Controls.Add(btnBack);
+        pnlHeader.Controls.Add(btnExit);
+        
         pnlLeftMovieInfo = new Panel
         {
             Size = new Size(400, 976),
@@ -139,6 +146,7 @@ public class FrmKioskShowtime : Form
             MaximumSize = new Size(350, 0)
         };
         pnlLeftMovieInfo.Controls.Add(lblMovieTitle);
+        
         pnlRightShowtimes = new Panel
         {
             Size = new Size(1444, 876),
@@ -152,24 +160,6 @@ public class FrmKioskShowtime : Form
             Location = new Point(0, 0),
             BackColor = ColorTranslator.FromHtml("#101418")
         };
-
-        string[] dates = { "HÔM NAY 26", "NGÀY MAI 27", "THỨ HAI 28", "THỨ BA 29" };
-        for (int i = 0; i < dates.Length; i++)
-        {
-            Button btnDate = new Button
-            {
-                Text = dates[i],
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                ForeColor = i == 0 ? ColorTranslator.FromHtml("#101418") : ColorTranslator.FromHtml("#c1c7cf"),
-                BackColor = i == 0 ? ColorTranslator.FromHtml("#38bdf8") : ColorTranslator.FromHtml("#181c20"),
-                FlatStyle = FlatStyle.Flat,
-                Size = new Size(160, 60),
-                Margin = new Padding(0, 0, 16, 0),
-                Cursor = Cursors.Hand
-            };
-            btnDate.FlatAppearance.BorderSize = 0;
-            pnlDates.Controls.Add(btnDate);
-        }
         pnlShowtimes = new FlowLayoutPanel
         {
             Location = new Point(0, 92),
@@ -180,6 +170,7 @@ public class FrmKioskShowtime : Form
         };
         pnlRightShowtimes.Controls.Add(pnlDates);
         pnlRightShowtimes.Controls.Add(pnlShowtimes);
+        
         pnlBottomBar = new Panel
         {
             Size = new Size(1444, 84),
@@ -210,7 +201,7 @@ public class FrmKioskShowtime : Form
         btnContinue.FlatAppearance.BorderSize = 0;
         btnContinue.Click += (s, e) =>
         {
-           // tạm thời chưa tạo FrmKioskSeat
+            MessageBox.Show($"Xác nhận chọn Suất chiếu ID: {_selectedShowtimeId}. Chuẩn bị sang Màn hình Chọn Ghế!", "CineLuxe Kiosk");
         };
         pnlBottomBar.Controls.Add(lblSelectedShowtimeSummary);
         pnlBottomBar.Controls.Add(btnContinue);
@@ -228,68 +219,145 @@ public class FrmKioskShowtime : Form
         };
         _timer.Start();
     }
-    private void LoadShowtimes()
+    private void LoadMovieLeftInfo()
     {
         using var db = new CinemaDbContext();
-        var movies = db.Movies.FirstOrDefault(m => m.MovieId == _movieId);
-        if (movies != null)
+        var movie = db.Movies.FirstOrDefault(m => m.MovieId == _movieId);
+        if (movie == null) return;
+
+        lblMovieTitle.Text = movie.Title.ToUpper();
+        
+        PictureBox picLeftPoster = new PictureBox
         {
-            lblMovieTitle.Text = movies.Title.ToUpper();
+            Size = new Size(350, 240),
+            Location = new Point(24, 65),
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = ColorTranslator.FromHtml("#262a2f")
+        };
+        var posterProperty = movie.GetType().GetProperty("PosterUrl") ?? movie.GetType().GetProperty("ImagePath");
+        string posterPath = posterProperty?.GetValue(movie)?.ToString();
 
-            Label lblBadgeAge = new Label
-            {
-                Text = "T16 • CẤM DƯỚI 16 TUỔI",
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = Color.White,
-                BackColor = ColorTranslator.FromHtml("#ef4444"),
-                Padding = new Padding(8, 4, 8, 4),
-                Location = new Point(24, 74),
-                AutoSize = true
-            };
+        if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
+        {
+            try { picLeftPoster.Image = Image.FromFile(posterPath); } catch { }
+        }
+        var ageRatingProp = movie.GetType().GetProperty("AgeRating") ?? movie.GetType().GetProperty("Rating");
+        string ageRating = ageRatingProp?.GetValue(movie)?.ToString() ?? "T16";
+        if (string.IsNullOrWhiteSpace(ageRating)) ageRating = "T16";
 
-            Label lblDetail = new Label
-            {
-                Text = $"Thể loại: {movies.Genre}\nThời lượng: {movies.Duration} phút\nCông nghệ: IMAX LASER 4K\nĐánh giá: 8.8/10 ★",
-                Font = new Font("Segoe UI", 10F),
-                ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
-                Location = new Point(24, 120),
-                AutoSize = true
-            };
+        Color badgeColor = ageRating.StartsWith("P") ? ColorTranslator.FromHtml("#10B981") : ColorTranslator.FromHtml("#EF4444");
 
-            Label lblDescHeader = new Label
+        Label lblBadgeAge = new Label
+        {
+            Text = $"{ageRating.ToUpper()} • THEO QUY ĐỊNH RẠP",
+            Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+            ForeColor = Color.White,
+            BackColor = badgeColor,
+            Padding = new Padding(8, 4, 8, 4),
+            Location = new Point(24, 320),
+            AutoSize = true
+        };
+        Label lblDetail = new Label
+        {
+            Text = $"Thể loại: {movie.Genre}\nThời lượng: {movie.Duration} phút\nCông nghệ: IMAX LASER 4K\nĐánh giá: 8.8/10 ★",
+            Font = new Font("Segoe UI", 10F),
+            ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
+            Location = new Point(24, 360),
+            AutoSize = true
+        };
+       Label lblDescHeader = new Label
+        {
+            Text = "TÓM TẮT NỘI DUNG",
+            Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+            ForeColor = ColorTranslator.FromHtml("#ffb961"),
+            Location = new Point(24, 480),
+            AutoSize = true
+        };
+
+        var descProperty = movie.GetType().GetProperty("Description");
+        string description = descProperty?.GetValue(movie)?.ToString();
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            description = $"Bộ phim {movie.Title} hứa hẹn mang đến những giây phút giải trí tuyệt vời với công nghệ âm thanh sống động.";
+        }
+
+        Label lblDesc = new Label
+        {
+            Text = description,
+            Font = new Font("Segoe UI", 9.5F),
+            ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
+            Location = new Point(24, 510),
+            Size = new Size(350, 420),
+            AutoEllipsis = true
+        };
+
+        pnlLeftMovieInfo.Controls.Add(picLeftPoster);
+        pnlLeftMovieInfo.Controls.Add(lblBadgeAge);
+        pnlLeftMovieInfo.Controls.Add(lblDetail);
+        pnlLeftMovieInfo.Controls.Add(lblDescHeader);
+        pnlLeftMovieInfo.Controls.Add(lblDesc);
+    }
+    private void RenderDateTabs()
+    {
+        pnlDates.Controls.Clear();
+        DateTime today = DateTime.Today;
+
+        for (int i = 0; i < 4; i++)
+        {
+            DateTime targetDate = today.AddDays(i);
+            string dateTitle = "";
+
+            if (i == 0) dateTitle = $"HÔM NAY {targetDate:dd/MM}";
+            else if (i == 1) dateTitle = $"NGÀY MAI {targetDate:dd/MM}";
+            else
             {
-                Text = "TÓM TẮT NỘI DUNG",
+                string dayOfWeekVi = targetDate.ToString("dddd", new CultureInfo("vi-VN")).ToUpper();
+                dateTitle = $"{dayOfWeekVi} {targetDate:dd/MM}";
+            }
+
+            Button btnDate = new Button
+            {
+                Text = dateTitle,
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                ForeColor = ColorTranslator.FromHtml("#ffb961"),
-                Location = new Point(24, 240),
-                AutoSize = true
+                ForeColor = (targetDate.Date == _selectedDate.Date) ? ColorTranslator.FromHtml("#101418") : ColorTranslator.FromHtml("#c1c7cf"),
+                BackColor = (targetDate.Date == _selectedDate.Date) ? ColorTranslator.FromHtml("#38bdf8") : ColorTranslator.FromHtml("#181c20"),
+                FlatStyle = FlatStyle.Flat,
+                Size = new Size(180, 60),
+                Margin = new Padding(0, 0, 16, 0),
+                Cursor = Cursors.Hand,
+                Tag = targetDate
             };
+            btnDate.FlatAppearance.BorderSize = 0;
 
-            Label lblDesc = new Label
+            btnDate.Click += (s, e) =>
             {
-                Text = $"Bộ phim {movies.Title} hứa hẹn mang đến trải nghiệm giải trí tuyệt vời. Quý khách vui lòng chọn khung giờ chiếu phù hợp bên phải để tiến hành chọn ghế.",
-                Font = new Font("Segoe UI", 10F),
-                ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
-                Location = new Point(24, 270),
-                Size = new Size(350, 160)
+                _selectedDate = (DateTime)((Button)s).Tag;
+                RenderDateTabs();
+                LoadShowtimes();
             };
 
-            pnlLeftMovieInfo.Controls.Add(lblBadgeAge);
-            pnlLeftMovieInfo.Controls.Add(lblDetail);
-            pnlLeftMovieInfo.Controls.Add(lblDescHeader);
-            pnlLeftMovieInfo.Controls.Add(lblDesc);
-        } 
+            pnlDates.Controls.Add(btnDate);
+        }
+    }
+    private void LoadShowtimes()
+    {
+        pnlShowtimes.Controls.Clear();
+        _selectedShowtimeId = 0;
+        btnContinue.Enabled = false;
+        btnContinue.BackColor = ColorTranslator.FromHtml("#282C31");
+        lblSelectedShowtimeSummary.Text = "SUẤT CHIẾU ĐANG CHỌN: (Vui lòng chọn suất chiếu)";
 
+        using var db = new CinemaDbContext();
         var showtimes = db.Showtimes
-            .Where(s => s.MovieId == _movieId)
+            .Where(s => s.MovieId == _movieId && s.StartTime.Date == _selectedDate.Date)
             .OrderBy(s => s.StartTime)
             .ToList();
-        pnlShowtimes.Controls.Clear();
-        if(!showtimes.Any())
+
+        if (!showtimes.Any())
         {
             Label lblEmpty = new Label
             {
-                Text = "Hiện chưa có suất chiếu tiếp theo cho phim này.",
+                Text = $"Không có suất chiếu nào vào ngày {_selectedDate:dd/MM/yyyy}.",
                 ForeColor = ColorTranslator.FromHtml("#94A3B8"),
                 Font = new Font("Segoe UI", 12F),
                 AutoSize = true,
@@ -297,7 +365,8 @@ public class FrmKioskShowtime : Form
             };
             pnlShowtimes.Controls.Add(lblEmpty);
             return;
-    }
+        }
+
         Label lblRoomHeader = new Label
         {
             Text = "IMAX LASER 4K  •  Phòng Chiếu 01 (Màn hình vòm 26m) - Giá vé từ 160.000 đ",
@@ -309,40 +378,50 @@ public class FrmKioskShowtime : Form
         pnlShowtimes.Controls.Add(lblRoomHeader);
         pnlShowtimes.SetFlowBreak(lblRoomHeader, true);
 
+        DateTime now = DateTime.Now;
+
         foreach (var st in showtimes)
         {
+            bool isPast = st.StartTime < now; 
+
             Button btnTime = new Button
             {
-                Text = $"{st.StartTime:HH:mm}\nPhòng {st.RoomId}\n Còn 140 ghế",
+                Text = isPast ? $"{st.StartTime:HH:mm}\n(Đã chiếu)" : $"{st.StartTime:HH:mm}\nPhòng {st.RoomId}\nCòn 140 ghế",
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                ForeColor = Color.White,
-                BackColor = ColorTranslator.FromHtml("#181c20"),
+                ForeColor = isPast ? ColorTranslator.FromHtml("#64748B") : Color.White,
+                BackColor = isPast ? ColorTranslator.FromHtml("#0F172A") : ColorTranslator.FromHtml("#181c20"),
                 Size = new Size(160, 90),
-                Margin = new Padding(0,0,20,20),
+                Margin = new Padding(0, 0, 20, 20),
                 FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
+                Enabled = !isPast, 
+                Cursor = isPast ? Cursors.No : Cursors.Hand,
                 Tag = st.ShowtimeId
             };
-            btnTime.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#40484f");
-            btnTime.Click += (s, e) =>
+            btnTime.FlatAppearance.BorderColor = isPast ? ColorTranslator.FromHtml("#1E293B") : ColorTranslator.FromHtml("#40484f");
+
+            if (!isPast)
             {
-                foreach (Control ctrl in pnlShowtimes.Controls)
+                btnTime.Click += (s, e) =>
                 {
-                    if (ctrl is Button b)
+                    foreach (Control ctrl in pnlShowtimes.Controls)
                     {
-                        b.BackColor = ColorTranslator.FromHtml("#181c20");
-                        b.ForeColor = Color.White;
+                        if (ctrl is Button b && b.Enabled)
+                        {
+                            b.BackColor = ColorTranslator.FromHtml("#181c20");
+                            b.ForeColor = Color.White;
+                        }
                     }
-                    
-                }
-                btnTime.BackColor = ColorTranslator.FromHtml("#ffb961");
-                btnTime.ForeColor = ColorTranslator.FromHtml("#101418");
-                _selectedShowtimeId = st.ShowtimeId;
-                lblSelectedShowtimeSummary.Text = $"SUẤT CHIẾU ĐANG CHỌN: IMAX LASER 4K • Phòng Chiếu {st.RoomId} • {st.StartTime:HH:mm}";
-                btnContinue.Enabled = true;
-                btnContinue.BackColor = ColorTranslator.FromHtml("#ffb961");
-            };
-            pnlShowtimes.Controls.Add(btnTime);
+                    btnTime.BackColor = ColorTranslator.FromHtml("#ffb961");
+                    btnTime.ForeColor = ColorTranslator.FromHtml("#101418");
+                    _selectedShowtimeId = st.ShowtimeId;
+
+                    lblSelectedShowtimeSummary.Text = $"SUẤT CHIẾU ĐANG CHỌN: IMAX LASER 4K • Phòng Chiếu {st.RoomId} • {st.StartTime:HH:mm}";
+                    btnContinue.Enabled = true;
+                    btnContinue.BackColor = ColorTranslator.FromHtml("#ffb961");
+                };
             }
+
+            pnlShowtimes.Controls.Add(btnTime);
         }
+    }
 }
