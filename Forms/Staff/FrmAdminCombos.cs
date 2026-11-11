@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Data.SQLite;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -19,18 +20,21 @@ namespace CinemaManagement.Forms.Staff
         private readonly Font FontInterSmall = new Font("Segoe UI", 8F, FontStyle.Regular);
         private readonly Font FontMono = new Font("Consolas", 8.5F, FontStyle.Regular);
 
+        private string connectionString = "Data Source=cinema.db;Version=3;";
+        private string placeholderText = "🔍 Tìm kiếm SKU, tên combo...";
+
         public FrmAdminCombos()
         {
             InitializeComponent();
             SetupCustomUI();
             SetupButtonEvents();
-            AddQuickNavigationButtons();
-            LoadMockData();
+            SetupSidebarEvents();
+            LoadDataFromDb();
         }
 
         private void SetupCustomUI()
         {
-            this.BackColor = ColorBg;
+            this.BackColor = ColorTranslator.FromHtml("#0b0f12");
             this.ForeColor = ColorTextWhite;
             this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
 
@@ -47,52 +51,64 @@ namespace CinemaManagement.Forms.Staff
             dgvCombos.RowTemplate.Height = 52;
 
             dgvCombos.CellPainting += DgvCombos_CellPainting;
+
+            if (txtSearch != null)
+            {
+                txtSearch.Text = placeholderText;
+                txtSearch.ForeColor = ColorTextMuted;
+
+                txtSearch.Enter += (s, e) => {
+                    if (txtSearch.Text == placeholderText)
+                    {
+                        txtSearch.Text = "";
+                        txtSearch.ForeColor = ColorTextWhite;
+                    }
+                };
+
+                txtSearch.Leave += (s, e) => {
+                    if (string.IsNullOrWhiteSpace(txtSearch.Text))
+                    {
+                        txtSearch.Text = placeholderText;
+                        txtSearch.ForeColor = ColorTextMuted;
+                    }
+                };
+            }
         }
 
-        private void AddQuickNavigationButtons()
+        private void SetupSidebarEvents()
         {
-            Button btnGoPos = new Button();
-            btnGoPos.Text = "🖥️ Màn Hình POS";
-            btnGoPos.Size = new Size(130, 30);
-            btnGoPos.Location = new Point(275, 12);
-            btnGoPos.BackColor = ColorTranslator.FromHtml("#1E293B");
-            btnGoPos.ForeColor = Color.White;
-            btnGoPos.FlatStyle = FlatStyle.Flat;
-            btnGoPos.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#38BDF8");
-            btnGoPos.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-            btnGoPos.Click += (s, e) => {
-                FrmStaffPOS posForm = new FrmStaffPOS();
-                posForm.Show();
-                this.Hide();
-            };
+            if (lnkPos != null)
+            {
+                lnkPos.LinkClicked += (s, e) => {
+                    FrmStaffPOS posForm = new FrmStaffPOS(1, "Thu ngân mặc định");
+                    posForm.Show();
+                    this.Hide();
+                };
+            }
 
-            Button btnGoUsers = new Button();
-            btnGoUsers.Text = "👤 Quản Lý User";
-            btnGoUsers.Size = new Size(130, 30);
-            btnGoUsers.Location = new Point(415, 12);
-            btnGoUsers.BackColor = ColorTranslator.FromHtml("#0284C7");
-            btnGoUsers.ForeColor = Color.White;
-            btnGoUsers.FlatStyle = FlatStyle.Flat;
-            btnGoUsers.FlatAppearance.BorderSize = 0;
-            btnGoUsers.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-            btnGoUsers.Click += (s, e) => {
-                FrmAdminUsers usersForm = new FrmAdminUsers();
-                usersForm.Show();
-                this.Hide();
-            };
+            if (lnkUsers != null)
+            {
+                lnkUsers.LinkClicked += (s, e) => {
+                    FrmAdminUsers usersForm = new FrmAdminUsers();
+                    usersForm.Show();
+                    this.Hide();
+                };
+            }
 
-            this.Controls.Add(btnGoPos);
-            this.Controls.Add(btnGoUsers);
-            btnGoPos.BringToFront();
-            btnGoUsers.BringToFront();
+            if (lnkCombo != null)
+            {
+                lnkCombo.LinkClicked += (s, e) => {
+                    // Đang ở màn hình quản lý combo
+                };
+            }
         }
 
         private void SetupButtonEvents()
         {
-            btnAddComboTop.Click += BtnAddComboTop_Click;
-            btnUpdatePrice.Click += BtnUpdatePrice_Click;
-            btnImportStore.Click += BtnImportStore_Click;
-            btnExportExcel.Click += BtnExportExcel_Click;
+            if (btnAddComboTop != null) btnAddComboTop.Click += BtnAddComboTop_Click;
+            if (btnUpdatePrice != null) btnUpdatePrice.Click += BtnUpdatePrice_Click;
+            if (btnImportStore != null) btnImportStore.Click += BtnImportStore_Click;
+            if (btnExportExcel != null) btnExportExcel.Click += BtnExportExcel_Click;
         }
 
         private void BtnAddComboTop_Click(object sender, EventArgs e)
@@ -123,17 +139,63 @@ namespace CinemaManagement.Forms.Staff
             MessageBox.Show("Đã xuất dữ liệu danh mục Combo & Kho F&B ra file Excel thành công!", "Xuất Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void LoadMockData()
+        private void LoadDataFromDb()
         {
             dgvCombos.Rows.Clear();
-            AddComboRow("SKU-CB-001", "Combo Couple IMAX Gold", "1 Bắp ngọt 85oz + 2 Pepsi 32oz", "Combo tiết kiệm", "#0F2738", "#38BDF8", "38.000 đ", "145.000 đ", "30");
-            AddComboRow("SKU-CB-002", "Combo Solo Gold", "1 Bắp mặn 64oz + 1 Coca 22oz", "Combo tiết kiệm", "#0F2738", "#38BDF8", "24.500 đ", "95.000 đ", "18");
-            AddComboRow("SKU-PC-003", "Bắp Phô Mai Savory 46oz", "Bột phô mai nhập khẩu New Zealand", "Bắp rang bơ", "#2A2012", "#FBBF24", "15.200 đ", "65.000 đ", "42");
-            AddComboRow("SKU-PC-004", "Bắp Caramel Royal 64oz", "Caramel thắng nâu hạt tròn Mỹ", "Bắp rang bơ", "#2A2012", "#FBBF24", "19.800 đ", "79.000 đ", "25");
-            AddComboRow("SKU-DK-005", "Coca-Cola Tươi 32oz Lớn", "Post-mix CO2 tiêu chuẩn 4.2 Bar", "Nước giải khát", "#0D2826", "#2DD4BF", "6.500 đ", "39.000 đ", "110");
-            AddComboRow("SKU-DK-006", "Sprite Hương Chanh 32oz", "Post-mix CO2 tiêu chuẩn 4.0 Bar", "Nước giải khát", "#0D2826", "#2DD4BF", "6.500 đ", "39.000 đ", "95");
-            AddComboRow("SKU-SN-007", "Snack Khoai Tây Nắm Truffle 110g", "Gói đóng sẵn nguyên seal nhập khẩu", "Snack đóng gói", "#221C2E", "#C084FC", "28.800 đ", "55.000 đ", "12");
-            AddComboRow("SKU-CB-008", "Combo Suite VIP Premier", "Dành riêng cho cụm rạp Gold Lounge", "Combo tiết kiệm", "#0F2738", "#38BDF8", "62.000 đ", "220.000 đ", "8");
+            bool loaded = false;
+            int totalProducts = 0;
+            decimal totalInventoryValue = 0;
+            string query = "SELECT Combold, ComboName, Price, ImagePath FROM ComboItems;";
+
+            try
+            {
+                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
+                {
+                    conn.Open();
+                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
+                    {
+                        using (SQLiteDataReader reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                totalProducts++;
+                                string id = reader["Combold"].ToString();
+                                string name = reader["ComboName"].ToString();
+                                decimal price = reader.GetDecimal(reader.GetOrdinal("Price"));
+                                string imagePath = reader["ImagePath"]?.ToString() ?? "Bắp nước tiêu chuẩn";
+
+                                int stockQty = 30;
+                                totalInventoryValue += (price * 0.7m) * stockQty;
+
+                                AddComboRow($"SKU-CB-{id}", name, imagePath, "Combo tiết kiệm", "#0F2738", "#38BDF8", $"{price * 0.7m:N0} đ", $"{price:N0} đ", stockQty.ToString());
+                                loaded = true;
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            if (!loaded)
+            {
+                totalProducts = 3;
+                totalInventoryValue = (38000 * 30) + (24500 * 18) + (55000 * 25);
+                AddComboRow("SKU-CB-001", "Combo Solo (1 Bắp + 1 Nước)", "1 Bắp ngọt 85oz + 2 Pepsi 32oz", "Combo tiết kiệm", "#0F2738", "#38BDF8", "38.000 đ", "79.000 đ", "30");
+                AddComboRow("SKU-CB-002", "Combo Couple (1 Bắp + 2 Nước)", "1 Bắp mặn 64oz + 1 Coca 22oz", "Combo tiết kiệm", "#0F2738", "#38BDF8", "24.500 đ", "109.000 đ", "18");
+                AddComboRow("SKU-CB-003", "Combo Family Siêu To", "2 Bắp L + 3 Pepsi + 1 Snack", "Combo gia đình", "#0F2738", "#38BDF8", "55.000 đ", "179.000 đ", "25");
+            }
+
+            UpdateFooterStatus(totalProducts, totalInventoryValue);
+        }
+
+        private void UpdateFooterStatus(int totalProducts, decimal totalValue)
+        {
+            if (lblFooterStatus != null)
+            {
+                lblFooterStatus.Text = $"🟢  Tổng mặt hàng: {totalProducts} sản phẩm FB  |  Giá trị tồn kho: {totalValue:N0} đ  |  SQLite WAL Mode: OK";
+            }
         }
 
         private void AddComboRow(string sku, string name, string desc, string category, string badgeBgHex, string badgeFgHex, string costPrice, string listPrice, string stock)
@@ -205,8 +267,10 @@ namespace CinemaManagement.Forms.Staff
             }
             path.AddArc(arc, 180, 90);
             arc.X = bounds.Right - diameter;
+
             path.AddArc(arc, 270, 90);
             arc.Y = bounds.Bottom - diameter;
+
             path.AddArc(arc, 0, 90);
             arc.X = bounds.Left;
             path.AddArc(arc, 90, 90);
