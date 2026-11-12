@@ -11,12 +11,12 @@ namespace CinemaManagement.Models
         public int BookingId { get; set; }
         
         [ForeignKey("BookingId")]
-        public virtual Booking Booking { get; set; }
+        public virtual Booking Booking { get; set; } = null!;
 
         public int ComboId { get; set; } 
         
         [ForeignKey("ComboId")]
-        public virtual ComboItem ComboItem { get; set; }
+        public virtual ComboItem ComboItem { get; set; } = null!;
 
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
