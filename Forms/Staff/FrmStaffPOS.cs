@@ -194,8 +194,8 @@ namespace CinemaManagement.Forms.Staff
 
             if (dbShowtimes.Count == 0)
             {
-                dbShowtimes.Add(new ShowtimeDetail { ShowtimeId = 101, MovieId = 1, RoomId = 1, StartTime = "19:30", RoomName = "IMAX Laser", Price = 160000 });
-                dbShowtimes.Add(new ShowtimeDetail { ShowtimeId = 102, MovieId = 1, RoomId = 2, StartTime = "21:15", RoomName = "Phòng 02", Price = 120000 });
+                dbShowtimes.Add(new ShowtimeDetail { ShowtimeId = 101, MovieId = 1, RoomId = 1, StartTime = "2026-11-12 19:30:00", RoomName = "IMAX Laser", Price = 160000 });
+                dbShowtimes.Add(new ShowtimeDetail { ShowtimeId = 102, MovieId = 1, RoomId = 2, StartTime = "2026-11-12 21:15:00", RoomName = "Phòng 02", Price = 120000 });
             }
 
             UpdateActiveShowtimeForSelectedMovie();
@@ -206,7 +206,10 @@ namespace CinemaManagement.Forms.Staff
             var currentMovieObj = dbMovies.Find(m => m.Title == selectedMovie);
             if (currentMovieObj != null)
             {
-                var matchShow = dbShowtimes.Find(s => s.MovieId == currentMovieObj.MovieId);
+                DateTime now = DateTime.Now;
+                var matchShow = dbShowtimes.Find(s => s.MovieId == currentMovieObj.MovieId && 
+                    (DateTime.TryParse(s.StartTime, out var dt) ? dt >= now : true));
+
                 if (matchShow != null)
                 {
                     selectedShowtime = $"{matchShow.StartTime} • P.{matchShow.RoomId:D2} [{matchShow.RoomName}]";
@@ -214,8 +217,8 @@ namespace CinemaManagement.Forms.Staff
                 }
                 else
                 {
-                    selectedShowtime = "19:30 • P.01 [Standard]";
-                    selectedTicketPrice = 110000;
+                    selectedShowtime = "Chưa có suất chiếu khả dụng";
+                    selectedTicketPrice = 0;
                 }
             }
         }
@@ -376,7 +379,18 @@ namespace CinemaManagement.Forms.Staff
             var currentMovieObj = dbMovies.Find(m => m.Title == selectedMovie);
             if (currentMovieObj == null) return;
 
-            var movieShows = dbShowtimes.FindAll(s => s.MovieId == currentMovieObj.MovieId);
+            DateTime now = DateTime.Now;
+
+            // Lọc chỉ lấy các suất chiếu chưa quá thời gian hiện tại
+            var movieShows = dbShowtimes.FindAll(s => 
+            {
+                if (s.MovieId != currentMovieObj.MovieId) return false;
+                if (DateTime.TryParse(s.StartTime, out DateTime showTimeParsed))
+                {
+                    return showTimeParsed >= now;
+                }
+                return true;
+            });
 
             foreach (var show in movieShows)
             {
