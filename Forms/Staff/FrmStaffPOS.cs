@@ -4,6 +4,7 @@ using System.Data.SQLite;
 using System.Drawing;
 using System.Globalization;
 using System.Windows.Forms;
+using CinemaManagement.Controls;
 using CinemaManagement.Data;
 using CinemaManagement.Models;
 
@@ -15,9 +16,6 @@ namespace CinemaManagement.Forms.Staff
         private readonly Color ColorSurface = ColorTranslator.FromHtml("#101418");
         private readonly Color ColorCardBg = ColorTranslator.FromHtml("#181c20");
         private readonly Color ColorCardActive = ColorTranslator.FromHtml("#0284c7");
-        private readonly Color ColorSeatNormal = ColorTranslator.FromHtml("#334155");
-        private readonly Color ColorSeatSelected = ColorTranslator.FromHtml("#f59e0b");
-        private readonly Color ColorSeatText = ColorTranslator.FromHtml("#94a3b8");
 
         private int loggedInUserId;
         private string loggedInUserName;
@@ -25,7 +23,7 @@ namespace CinemaManagement.Forms.Staff
         private string selectedMovie = "";
         private string selectedShowtime = "";
         private decimal selectedTicketPrice = 110000;
-        private int selectedRoomId = 1;
+        private int selectedShowtimeId = 101;
         private string connectionString = "Data Source=cinema.db;Version=3;";
 
         private List<MovieDetail> dbMovies = new List<MovieDetail>();
@@ -38,6 +36,7 @@ namespace CinemaManagement.Forms.Staff
 
         private FlowLayoutPanel pnlDynamicMovies;
         private FlowLayoutPanel pnlDynamicShowtimes;
+        private SeatMapControl seatMapControl;
 
         private class MovieDetail
         {
@@ -91,7 +90,7 @@ namespace CinemaManagement.Forms.Staff
 
             BuildDynamicMovieCatalog();
             BuildDynamicShowtimeCatalog();
-            BuildDynamicSeatMap();
+            InitializeSeatMapControl();
             BuildDynamicComboCatalog();
             UpdateOrderItems();
             UpdateTotalDisplay();
@@ -112,8 +111,27 @@ namespace CinemaManagement.Forms.Staff
             dgvOrderItems.DefaultCellStyle.SelectionForeColor = Color.White;
             dgvOrderItems.RowTemplate.Height = 38;
 
-            if (pnlSeatMatrix != null) pnlSeatMatrix.Location = new Point(230, 200);
             if (pnlComboCatalog != null) pnlComboCatalog.Location = new Point(230, 500);
+        }
+
+        private void InitializeSeatMapControl()
+        {
+            if (seatMapControl == null)
+            {
+                seatMapControl = new SeatMapControl();
+                seatMapControl.Location = new Point(230, 200);
+                seatMapControl.Size = new Size(515, 290);
+                this.Controls.Add(seatMapControl);
+                seatMapControl.BringToFront();
+
+                seatMapControl.OnSeatSelectionChanged += (seats) =>
+                {
+                    selectedSeats = new List<string>(seats);
+                    UpdateOrderItems();
+                };
+            }
+
+            seatMapControl.LoadSeatMap(selectedShowtimeId);
         }
 
         private void LoadFullMoviesFromDatabase()
@@ -221,11 +239,13 @@ namespace CinemaManagement.Forms.Staff
 
                 if (matchShow != null)
                 {
-                    selectedRoomId = matchShow.RoomId;
-                    selectedShowtime = $"{matchShow.StartTime} - P.{matchShow.RoomId:D2} [{matchShow.RoomName}]";
+                    selectedShowtimeId = matchShow.ShowtimeId;
+                    selectedShowtime = $"{matchShow.StartTime} • P.{matchShow.RoomId:D2} [{matchShow.RoomName}]";
                     selectedTicketPrice = matchShow.Price;
-                    LoadSeatsFromDatabase();
-                    BuildDynamicSeatMap();
+                    if (seatMapControl != null)
+                    {
+                        seatMapControl.LoadSeatMap(selectedShowtimeId);
+                    }
                 }
                 else
                 {
@@ -240,13 +260,12 @@ namespace CinemaManagement.Forms.Staff
             dbSeats.Clear();
             try
             {
-                string query = "SELECT SeatNumber, SeatType, Price FROM Seats WHERE RoomId = @RoomId;";
+                string query = "SELECT SeatNumber, SeatType, Price FROM Seats;";
                 using (SQLiteConnection conn = new SQLiteConnection(connectionString))
                 {
                     conn.Open();
                     using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
                     {
-                        cmd.Parameters.AddWithValue("@RoomId", selectedRoomId);
                         using (SQLiteDataReader reader = cmd.ExecuteReader())
                         {
                             while (reader.Read())
@@ -401,7 +420,6 @@ namespace CinemaManagement.Forms.Staff
 
             DateTime now = DateTime.Now;
 
-            // Lọc chỉ lấy các suất chiếu chưa quá thời gian hiện tại
             var movieShows = dbShowtimes.FindAll(s => 
             {
                 if (s.MovieId != currentMovieObj.MovieId) return false;
@@ -431,8 +449,13 @@ namespace CinemaManagement.Forms.Staff
                 var targetShow = show;
                 btnShow.Click += (s, e) =>
                 {
+                    selectedShowtimeId = targetShow.ShowtimeId;
                     selectedShowtime = $"{targetShow.StartTime} • P.{targetShow.RoomId:D2} [{targetShow.RoomName}]";
                     selectedTicketPrice = targetShow.Price;
+                    if (seatMapControl != null)
+                    {
+                        seatMapControl.LoadSeatMap(selectedShowtimeId);
+                    }
                     BuildDynamicShowtimeCatalog();
                     UpdateOrderItems();
                 };
@@ -578,7 +601,10 @@ namespace CinemaManagement.Forms.Staff
                 selectedSeats.Clear();
                 selectedCombos.Clear();
                 UpdateOrderItems();
-                BuildDynamicSeatMap();
+                if (seatMapControl != null)
+                {
+                    seatMapControl.LoadSeatMap(selectedShowtimeId);
+                }
                 BuildDynamicComboCatalog();
             };
 
@@ -587,7 +613,10 @@ namespace CinemaManagement.Forms.Staff
                 selectedSeats.Clear();
                 selectedCombos.Clear();
                 UpdateOrderItems();
-                BuildDynamicSeatMap();
+                if (seatMapControl != null)
+                {
+                    seatMapControl.LoadSeatMap(selectedShowtimeId);
+                }
                 BuildDynamicComboCatalog();
             };
 
@@ -629,80 +658,6 @@ namespace CinemaManagement.Forms.Staff
             {
                 MessageBox.Show("Lỗi ghi nhận giao dịch vào CSDL: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
-            }
-        }
-
-        private void BuildDynamicSeatMap()
-        {
-            pnlSeatMatrix.Controls.Clear();
-            pnlSeatMatrix.BackColor = ColorSurface;
-            string[] rows = { "A", "B", "C", "D", "G" };
-            int startY = 10;
-
-            foreach (string row in rows)
-            {
-                Label lblRow1 = new Label();
-                lblRow1.Text = row;
-                lblRow1.Font = new Font("Consolas", 9.5F, FontStyle.Bold);
-                lblRow1.ForeColor = ColorSeatText;
-                lblRow1.Location = new Point(10, startY + 3);
-                lblRow1.Size = new Size(18, 24);
-                pnlSeatMatrix.Controls.Add(lblRow1);
-
-                Label lblRow2 = new Label();
-                lblRow2.Text = row;
-                lblRow2.Font = new Font("Consolas", 9.5F, FontStyle.Bold);
-                lblRow2.ForeColor = ColorSeatText;
-                lblRow2.Location = new Point(480, startY + 3);
-                lblRow2.Size = new Size(18, 24);
-                pnlSeatMatrix.Controls.Add(lblRow2);
-
-                for (int i = 1; i <= 10; i++)
-                {
-                    string seatName = $"{row}{i}";
-                    Button btnSeat = new Button();
-                    btnSeat.Text = i.ToString("D2");
-                    btnSeat.Font = new Font("Consolas", 8F, FontStyle.Bold);
-                    btnSeat.Size = new Size(38, 26);
-                    btnSeat.Location = new Point(35 + (i * 41) + (i > 5 ? 15 : 0), startY);
-                    btnSeat.FlatStyle = FlatStyle.Flat;
-                    btnSeat.FlatAppearance.BorderSize = 1;
-                    btnSeat.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#1e242a");
-
-                    bool isSelected = selectedSeats.Contains(seatName);
-                    if (isSelected)
-                    {
-                        btnSeat.BackColor = ColorSeatSelected;
-                        btnSeat.ForeColor = Color.Black;
-                    }
-                    else
-                    {
-                        btnSeat.BackColor = ColorSeatNormal;
-                        btnSeat.ForeColor = ColorSeatText;
-                    }
-
-                    btnSeat.Click += (s, e) =>
-                    {
-                        if (selectedSeats.Contains(seatName))
-                        {
-                            selectedSeats.Remove(seatName);
-                            btnSeat.BackColor = ColorSeatNormal;
-                            btnSeat.ForeColor = ColorSeatText;
-                        }
-                        else
-                        {
-                            selectedSeats.Add(seatName);
-                            btnSeat.BackColor = ColorSeatSelected;
-                            btnSeat.ForeColor = Color.Black;
-                        }
-
-                        UpdateOrderItems();
-                    };
-
-                    pnlSeatMatrix.Controls.Add(btnSeat);
-                }
-
-                startY += 32;
             }
         }
 
