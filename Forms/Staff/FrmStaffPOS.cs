@@ -25,6 +25,7 @@ namespace CinemaManagement.Forms.Staff
         private string selectedMovie = "";
         private string selectedShowtime = "";
         private decimal selectedTicketPrice = 110000;
+        private int selectedRoomId = 1;
         private string connectionString = "Data Source=cinema.db;Version=3;";
 
         private List<MovieDetail> dbMovies = new List<MovieDetail>();
@@ -216,12 +217,15 @@ namespace CinemaManagement.Forms.Staff
             {
                 DateTime now = DateTime.Now;
                 var matchShow = dbShowtimes.Find(s => s.MovieId == currentMovieObj.MovieId && 
-                    (DateTime.TryParse(s.StartTime, out var dt) ? dt >= now : true));
+                                                      (DateTime.TryParse(s.StartTime, out var dt) ? dt >= now : true));
 
                 if (matchShow != null)
                 {
-                    selectedShowtime = $"{matchShow.StartTime} • P.{matchShow.RoomId:D2} [{matchShow.RoomName}]";
+                    selectedRoomId = matchShow.RoomId;
+                    selectedShowtime = $"{matchShow.StartTime} - P.{matchShow.RoomId:D2} [{matchShow.RoomName}]";
                     selectedTicketPrice = matchShow.Price;
+                    LoadSeatsFromDatabase();
+                    BuildDynamicSeatMap();
                 }
                 else
                 {
@@ -236,22 +240,29 @@ namespace CinemaManagement.Forms.Staff
             dbSeats.Clear();
             try
             {
-                string query = "SELECT SeatNumber, SeatType, Price FROM Seats;";
+                string query = "SELECT SeatNumber, SeatType, Price FROM Seats WHERE RoomId = @RoomId;";
                 using (SQLiteConnection conn = new SQLiteConnection(connectionString))
                 {
                     conn.Open();
                     using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
                     {
+                        cmd.Parameters.AddWithValue("@RoomId", selectedRoomId);
                         using (SQLiteDataReader reader = cmd.ExecuteReader())
                         {
                             while (reader.Read())
                             {
-                                string seatNum = reader["SeatNumber"].ToString();
+                                string seatNum = reader["SeatNumber"]?.ToString() ?? "";
+                                decimal.TryParse(
+                                    reader["Price"]?.ToString(),
+                                    NumberStyles.Any,
+                                    CultureInfo.InvariantCulture,
+                                    out decimal seatPrice);
+
                                 dbSeats[seatNum] = new SeatDetail
                                 {
                                     SeatNumber = seatNum,
-                                    SeatType = reader["SeatType"].ToString(),
-                                    Price = Convert.ToDecimal(reader["Price"])
+                                    SeatType = reader["SeatType"]?.ToString() ?? "Standard",
+                                    Price = seatPrice
                                 };
                             }
                         }
