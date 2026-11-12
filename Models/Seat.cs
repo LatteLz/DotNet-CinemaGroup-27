@@ -12,16 +12,18 @@ namespace CinemaManagement.Models
         public int RoomId { get; set; }
 
         [ForeignKey("RoomId")]
-        public virtual Room Room { get; set; } 
+        public virtual Room Room { get; set; } = null!;
 
         [Required]
         [StringLength(20)]
-        public string SeatNumber { get; set; } 
+        public string SeatNumber { get; set; } = string.Empty;
 
         [Required]
         [StringLength(50)]
-        public string SeatType { get; set; }
-        public decimal Price { get; set; } 
+        public string SeatType { get; set; } = "Standard";
+
+        public decimal Price { get; set; }
+        public bool IsAvailable { get; set; } = true;
         
         public virtual ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
         

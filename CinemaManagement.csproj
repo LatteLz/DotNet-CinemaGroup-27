@@ -44,6 +44,15 @@
       <Compile Update="Forms\Staff\FrmLogin.cs">
         <SubType>Form</SubType>
       </Compile>
+      <Compile Update="Forms\Admin\FrmMovieDetail.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Admin\FrmAdminRoom.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Admin\FrmAdminShowtimes.cs">
+        <SubType>Form</SubType>
+      </Compile>
     </ItemGroup>
 
     <ItemGroup>

@@ -72,8 +72,16 @@ namespace CinemaManagement.Forms.Admin
             BuildMainContent();
 
             searchTimer = new System.Windows.Forms.Timer { Interval = 300 };
-            searchTimer.Tick += (_, _) => { searchTimer.Stop(); RenderMovies(); };
-            FormClosed += (_, _) => { searchTimer.Dispose(); tip.Dispose(); };
+            searchTimer.Tick += (_, _) =>
+            {
+                searchTimer.Stop();
+                RenderMovies();
+            };
+            FormClosed += (_, _) =>
+            {
+                searchTimer.Dispose();
+                tip.Dispose();
+            };
 
             ResumeLayout(true);
         }
@@ -85,7 +93,11 @@ namespace CinemaManagement.Forms.Admin
             btnOpenSidebar = MakeButton("☰", 36, 30, BgCard, Color.White, true, false);
             btnOpenSidebar.Location = new Point(12, 5);
             btnOpenSidebar.Visible = false;
-            btnOpenSidebar.Click += (_, _) => { pnlSidebar.Visible = true; btnOpenSidebar.Visible = false; };
+            btnOpenSidebar.Click += (_, _) =>
+            {
+                pnlSidebar.Visible = true;
+                btnOpenSidebar.Visible = false;
+            };
             pnlHeader.Controls.Add(btnOpenSidebar);
 
             pnlHeader.Controls.Add(new Label
@@ -137,19 +149,47 @@ namespace CinemaManagement.Forms.Admin
 
             var btnClose = MakeButton("✕", 32, 32, BgCard, TxtDim, true, false);
             btnClose.Location = new Point(210, 14);
-            btnClose.Click += (_, _) => { pnlSidebar.Visible = false; btnOpenSidebar.Visible = true; };
-            btnClose.MouseEnter += (_, _) => { btnClose.BackColor = Danger; btnClose.ForeColor = Color.White; };
-            btnClose.MouseLeave += (_, _) => { btnClose.BackColor = BgCard; btnClose.ForeColor = TxtDim; };
+            btnClose.Click += (_, _) =>
+            {
+                pnlSidebar.Visible = false;
+                btnOpenSidebar.Visible = true;
+            };
+            btnClose.MouseEnter += (_, _) =>
+            {
+                btnClose.BackColor = Danger;
+                btnClose.ForeColor = Color.White;
+            };
+            btnClose.MouseLeave += (_, _) =>
+            {
+                btnClose.BackColor = BgCard;
+                btnClose.ForeColor = TxtDim;
+            };
             pnlSidebar.Controls.Add(btnClose);
 
             AddSidebarItem("Chọn vai trò", 90, false, Close);
-            AddSidebarItem("Bảng điều khiển", 140, false, () => ShowComingSoon("Bảng điều khiển"));
+            AddSidebarItem("Bảng điều khiển", 140, false, () => { Hide(); new FrmAdminDashboard().ShowDialog(); Show(); });
             AddSidebarItem("Quản lý danh mục phim", 190, true, null);
             AddSidebarItem("Chi tiết phim", 240, false, () => ShowComingSoon("Chi tiết phim"));
-            AddSidebarItem("Cấu hình phòng chiếu", 290, false, () => ShowComingSoon("Cấu hình phòng chiếu"));
-            AddSidebarItem("Lịch chiếu phim", 340, false, () => ShowComingSoon("Lịch chiếu phim"));
+            AddSidebarItem("Cấu hình phòng chiếu", 290, false, OpenRoomsForm);
+            AddSidebarItem("Lịch chiếu phim", 340, false, OpenShowtimesForm);
 
             Controls.Add(pnlSidebar);
+        }
+
+        private void OpenRoomsForm()
+        {
+            Hide();
+            FrmAdminRooms frm = new FrmAdminRooms();
+            frm.ShowDialog();
+            Show();
+        }
+
+        private void OpenShowtimesForm()
+        {
+            Hide();
+            FrmAdminShowtimes frm = new FrmAdminShowtimes();
+            frm.ShowDialog();
+            Show();
         }
 
         private void AddSidebarItem(string text, int top, bool isActive, Action? onClick)
@@ -177,6 +217,7 @@ namespace CinemaManagement.Forms.Admin
                 btn.MouseEnter += (_, _) => btn.BackColor = BgCard;
                 btn.MouseLeave += (_, _) => btn.BackColor = back;
             }
+
             if (onClick != null) btn.Click += (_, _) => onClick();
 
             pnlSidebar.Controls.Add(btn);
@@ -289,7 +330,11 @@ namespace CinemaManagement.Forms.Admin
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = new Font("Segoe UI", 10F)
             };
-            txtSearch.TextChanged += (_, _) => { searchTimer.Stop(); searchTimer.Start(); };
+            txtSearch.TextChanged += (_, _) =>
+            {
+                searchTimer.Stop();
+                searchTimer.Start();
+            };
             bar.Controls.Add(txtSearch);
 
             var buttons = new FlowLayoutPanel
@@ -326,6 +371,7 @@ namespace CinemaManagement.Forms.Admin
                 ShowError("Không tải được danh sách phim", ex);
                 allMovies = new List<Movie>();
             }
+
             UpdateStats();
             RenderMovies();
         }
@@ -362,8 +408,8 @@ namespace CinemaManagement.Forms.Admin
             string k = txtSearch.Text.Trim();
             var movies = allMovies
                 .Where(m => k.Length == 0
-                    || (m.Title ?? "").Contains(k, StringComparison.OrdinalIgnoreCase)
-                    || (m.Genre ?? "").Contains(k, StringComparison.OrdinalIgnoreCase))
+                            || (m.Title ?? "").Contains(k, StringComparison.OrdinalIgnoreCase)
+                            || (m.Genre ?? "").Contains(k, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(m => m.Title)
                 .ToList();
 
@@ -392,38 +438,69 @@ namespace CinemaManagement.Forms.Admin
             }
 
             flowMovieGrid.ResumeLayout(true);
-            lblFooter.Text = $"Hiển thị {movies.Count}/{allMovies.Count} phim   •   Cập nhật lúc {DateTime.Now:HH:mm:ss}";
+            lblFooter.Text =
+                $"Hiển thị {movies.Count}/{allMovies.Count} phim   •   Cập nhật lúc {DateTime.Now:HH:mm:ss}";
         }
 
         private Panel CreateMovieCard(Movie m)
+{
+    int id = m.MovieId;
+    string title = string.IsNullOrWhiteSpace(m.Title) ? "(Chưa đặt tên)" : m.Title.Trim();
+    string age = string.IsNullOrWhiteSpace(m.AgeRating) ? "P" : m.AgeRating.Trim();
+
+    var card = new Panel { Width = 330, Height = 332, Margin = new Padding(0, 0, 20, 20), BackColor = BgCard };
+
+    var poster = new Panel { Width = 330, Height = 170, Location = new Point(0, 0), BackColor = BgSurface };
+    var picPoster = new PictureBox
+    {
+        Dock = DockStyle.Fill,
+        SizeMode = PictureBoxSizeMode.Zoom,
+        BackColor = BgSurface
+    };
+
+    if (!string.IsNullOrEmpty(m.PosterPath))
+    {
+        string rawPath = m.PosterPath.TrimStart('/', '\\');
+        string fileNameWithoutExt = Path.GetFileNameWithoutExtension(rawPath);
+
+        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        string projectDir = Directory.GetParent(baseDir)?.Parent?.Parent?.Parent?.FullName ?? baseDir;
+        string[] searchFolders = new string[]
         {
-            int id = m.MovieId; 
-            string title = string.IsNullOrWhiteSpace(m.Title) ? "(Chưa đặt tên)" : m.Title.Trim();
-            string age = string.IsNullOrWhiteSpace(m.AgeRating) ? "P" : m.AgeRating.Trim();
+            Path.Combine(baseDir, "Image"),
+            Path.Combine(projectDir, "Image"),
+            Path.Combine(baseDir, Path.GetDirectoryName(rawPath) ?? ""),
+            Path.Combine(projectDir, Path.GetDirectoryName(rawPath) ?? "")
+        };
 
-            var card = new Panel { Width = 330, Height = 332, Margin = new Padding(0, 0, 20, 20), BackColor = BgCard };
+        string finalPath = "";
 
-            var poster = new Panel { Width = 330, Height = 170, Location = new Point(0, 0), BackColor = BgSurface };
-            var picPoster = new PictureBox
+        foreach (var folder in searchFolders)
+        {
+            if (Directory.Exists(folder))
             {
-                Dock = DockStyle.Fill,
-                SizeMode = PictureBoxSizeMode.Zoom,
-                BackColor = BgSurface
-            };
+                var matchedFile = Directory.GetFiles(folder)
+                    .FirstOrDefault(f => Path.GetFileNameWithoutExtension(f)
+                        .Equals(fileNameWithoutExt, StringComparison.OrdinalIgnoreCase));
 
-            if (!string.IsNullOrEmpty(m.PosterPath))
-            {
-                string cleanPath = m.PosterPath.TrimStart('/', '\\');
-                string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, cleanPath);
-
-                if (File.Exists(fullPath))
+                if (matchedFile != null)
                 {
-                    try
-                    {
-                        using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read);
-                        picPoster.Image = Image.FromStream(fs);
-                    }
-                    catch { }
+                    finalPath = matchedFile;
+                    break;
+                }
+            }
+        }
+
+        if (!string.IsNullOrEmpty(finalPath))
+        {
+            try
+            {
+                using var fs = new FileStream(finalPath, FileMode.Open, FileAccess.Read);
+                picPoster.Image = Image.FromStream(fs);
+            }
+            catch
+            {
+            }
                 }
             }
 
@@ -494,12 +571,20 @@ namespace CinemaManagement.Forms.Admin
 
             var btnSchedule = MakeButton("Xếp lịch", 100, 34, BgSurface, TxtSoft);
             btnSchedule.Location = new Point(112, 284);
-            btnSchedule.Click += (_, _) => ShowComingSoon("Xếp lịch chiếu");
+            btnSchedule.Click += (_, _) => OpenShowtimesForm();
 
             var btnDelete = MakeButton("Xóa", 98, 34, BgSurface, TxtSoft);
             btnDelete.Location = new Point(218, 284);
-            btnDelete.MouseEnter += (_, _) => { btnDelete.BackColor = Danger; btnDelete.ForeColor = Color.White; };
-            btnDelete.MouseLeave += (_, _) => { btnDelete.BackColor = BgSurface; btnDelete.ForeColor = TxtSoft; };
+            btnDelete.MouseEnter += (_, _) =>
+            {
+                btnDelete.BackColor = Danger;
+                btnDelete.ForeColor = Color.White;
+            };
+            btnDelete.MouseLeave += (_, _) =>
+            {
+                btnDelete.BackColor = BgSurface;
+                btnDelete.ForeColor = TxtSoft;
+            };
             btnDelete.Click += (_, _) => DeleteMovie(id, title);
 
             card.Controls.Add(btnEdit);
@@ -512,24 +597,32 @@ namespace CinemaManagement.Forms.Admin
         private void AddMovie()
         {
             using var dlg = new MovieEditorDialog(null);
-            if (dlg.ShowDialog(this) != DialogResult.OK) return;
-
-            try
+            if (dlg.ShowDialog(this) == DialogResult.OK)
             {
-                SaveNewMovie(dlg.Result);
-                ReloadFromDatabase();
-            }
-            catch (Exception ex)
-            {
-                ShowError("Không thêm được phim", ex);
+                try
+                {
+                    SaveNewMovie(dlg.Result);
+                    ReloadFromDatabase();
+                }
+                catch (Exception ex)
+                {
+                    ShowError("Không thêm được phim mới", ex);
+                }
             }
         }
 
         private void EditMovie(int id)
         {
             Movie? movie;
-            try { movie = FindMovie(id); }
-            catch (Exception ex) { ShowError("Không đọc được thông tin phim", ex); return; }
+            try
+            {
+                movie = FindMovie(id);
+            }
+            catch (Exception ex)
+            {
+                ShowError("Không đọc được thông tin phim", ex);
+                return;
+            }
 
             if (movie == null)
             {
@@ -539,23 +632,23 @@ namespace CinemaManagement.Forms.Admin
             }
 
             using var dlg = new MovieEditorDialog(movie);
-            if (dlg.ShowDialog(this) != DialogResult.OK) return;
-
-            try
+            if (dlg.ShowDialog(this) == DialogResult.OK)
             {
-                SaveChangedMovie(dlg.Result);
-                ReloadFromDatabase();
-            }
-            catch (Exception ex)
-            {
-                ShowError("Không lưu được thay đổi", ex);
+                try
+                {
+                    SaveChangedMovie(dlg.Result);
+                    ReloadFromDatabase();
+                }
+                catch (Exception ex)
+                {
+                    ShowError("Không cập nhật được phim", ex);
+                }
             }
         }
 
         private void DeleteMovie(int id, string title)
         {
-            var confirm = MessageBox.Show($"Xóa phim \"{title}\"?", "Xác nhận xóa",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            var confirm = MessageBox.Show($"Xóa phim \"{title}\"?", "Xác nhận xóa", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm != DialogResult.Yes) return;
 
             try
@@ -590,7 +683,7 @@ namespace CinemaManagement.Forms.Admin
                     sb.AppendLine(string.Join(",", m.MovieId, Csv(m.Title), Csv(m.Genre), m.Duration, Csv(m.AgeRating)));
 
                 File.WriteAllText(dlg.FileName, sb.ToString(), new UTF8Encoding(true));
-                MessageBox.Show("Đã xuất danh sách phim.", "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Đã xuất danh sách phim thành công.", "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -609,7 +702,7 @@ namespace CinemaManagement.Forms.Admin
         private static Movie? FindMovie(int id)
         {
             using var db = new CinemaDbContext();
-            return db.Movies.AsNoTracking().FirstOrDefault(m => m.MovieId == id); 
+            return db.Movies.AsNoTracking().FirstOrDefault(m => m.MovieId == id);
         }
 
         private static void SaveNewMovie(Movie movie)
@@ -631,11 +724,9 @@ namespace CinemaManagement.Forms.Admin
             using var db = new CinemaDbContext();
 
             if (db.Showtimes.Any(s => s.MovieId == id))
-                throw new InvalidOperationException(
-                    "Phim này đã có suất chiếu nên không thể xóa. Hãy xóa các suất chiếu của phim trước.");
+                throw new InvalidOperationException("Phim này đã có suất chiếu nên không thể xóa. Hãy xóa các suất chiếu của phim trước.");
 
-            var movie = db.Movies.Find(id)
-                        ?? throw new InvalidOperationException("Không tìm thấy phim cần xóa.");
+            var movie = db.Movies.Find(id) ?? throw new InvalidOperationException("Không tìm thấy phim cần xóa.");
             db.Movies.Remove(movie);
             db.SaveChanges();
         }
@@ -646,8 +737,7 @@ namespace CinemaManagement.Forms.Admin
             => MessageBox.Show($"{message}:\n{ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
         private static void ShowComingSoon(string feature)
-            => MessageBox.Show($"Màn hình \"{feature}\" đang được phát triển.", "Thông báo",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            => MessageBox.Show($"Màn hình \"{feature}\" đang được phát triển.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
         private static Color AgeColor(string? age) => (age ?? "").Trim().ToUpperInvariant() switch
         {
@@ -658,8 +748,7 @@ namespace CinemaManagement.Forms.Admin
             _ => ColorTranslator.FromHtml("#64748B")
         };
 
-        private static Button MakeButton(string text, int width, int height, Color back, Color fore,
-                                         bool bold = false, bool border = true)
+        private static Button MakeButton(string text, int width, int height, Color back, Color fore, bool bold = false, bool border = true)
         {
             var btn = new Button
             {
