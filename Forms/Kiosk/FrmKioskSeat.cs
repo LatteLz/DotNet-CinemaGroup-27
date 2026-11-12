@@ -5,60 +5,55 @@ using System.Linq;
 using System.Windows.Forms;
 using CinemaManagement.Data;
 using CinemaManagement.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace CinemaManagement.Forms.Kiosk;
 
 public class FrmKioskSeat : Form
 {
-    private int _showtimeId;
+    private readonly int _showtimeId;
     private int _movieId;
     private decimal _seatPrice = 160000m;
-    private List<string> _selectedSeats = new List<string>();
-    private Controls.SeatMapControl _seatMapControl;
-    private Panel pnlHeader;
-    private Panel pnlLeftInfo;
-    private Panel pnlScreenArea;
-    private FlowLayoutPanel pnlSeatGrid;
-    private Panel pnlBottomBar;
-    private Label lblClock;
-    private Label lblMovieTitle;
-    private Label lblShowtimeInfo;
-    private Label lblSelectedSeats;
-    private Label lblTotalPrice;
-    private Button btnContinuePayment;
-    private System.Windows.Forms.Timer _timer;
+    private List<string> _selectedSeats = new();
+
+    private Controls.SeatMapControl _seatMapControl = null!;
+    private Panel pnlHeader = null!;
+    private Panel pnlLeftInfo = null!;
+    private Panel pnlScreenArea = null!;
+    private Panel pnlBottomBar = null!;
+    private Label lblClock = null!;
+    private Label lblMovieTitle = null!;
+    private Label lblShowtimeInfo = null!;
+    private Label lblSelectedSeats = null!;
+    private Label lblTotalPrice = null!;
+    private Button btnContinuePayment = null!;
+    private System.Windows.Forms.Timer _timer = null!;
 
     public FrmKioskSeat(int showtimeId)
     {
         _showtimeId = showtimeId;
         InitializeComponent();
         LoadShowtimeDetails();
-        RenderSeatMap();
         InitSeatMapControl();
     }
+
     private void InitSeatMapControl()
     {
         _seatMapControl = new Controls.SeatMapControl
         {
-            Location = new Point(50, 140),
-            Size =new Size(1100, 580)
+            Location = new Point(184, 90),
+            Size = new Size(1100, 750)
         };
         _seatMapControl.OnSeatSelectionChanged += (selectedSeats) =>
         {
             _selectedSeats = selectedSeats;
-            UpdateTotalPriceDisplay();
+            UpdateSummary();
         };
 
-        this.Controls.Add(_seatMapControl);
+        pnlScreenArea.Controls.Add(_seatMapControl);
         _seatMapControl.LoadSeatMap(_showtimeId);
     }
-    private void UpdateTotalPriceDisplay()
-    {
-        decimal total = _selectedSeats.Count * _seatPrice;
-        lblTotalPrice.Text = $"{total:N0} VNĐ";
-        if (lblSelectedSeats != null)
-            lblSelectedSeats.Text = $"Đã chọn: {_selectedSeats.Count} ghế";
-    }
+
     private void InitializeComponent()
     {
         this.SuspendLayout();
@@ -67,12 +62,15 @@ public class FrmKioskSeat : Form
         this.StartPosition = FormStartPosition.CenterScreen;
         this.FormBorderStyle = FormBorderStyle.None;
         this.BackColor = ColorTranslator.FromHtml("#101418");
+
+        // 1. HEADER
         pnlHeader = new Panel
         {
             Size = new Size(1920, 80),
             Location = new Point(0, 0),
             BackColor = ColorTranslator.FromHtml("#181c20")
         };
+
         Label lblLogo = new Label
         {
             Text = "CINELUXE KIOSK",
@@ -81,6 +79,7 @@ public class FrmKioskSeat : Form
             Location = new Point(24, 26),
             AutoSize = true
         };
+
         Label lblStep1 = new Label
         {
             Text = "1. Chọn Phim",
@@ -98,6 +97,7 @@ public class FrmKioskSeat : Form
             Location = new Point(700, 28),
             AutoSize = true
         };
+
         Label lblStep3 = new Label
         {
             Text = "3. Chọn Ghế",
@@ -117,6 +117,7 @@ public class FrmKioskSeat : Form
             Location = new Point(1530, 26),
             AutoSize = true
         };
+
         Button btnBack = new Button
         {
             Text = "← Quay lại",
@@ -135,28 +136,7 @@ public class FrmKioskSeat : Form
             frmShowtime.Show();
             this.Close();
         };
-        pnlBottomBar.Controls.Add(lblSelectedSeats);
-        pnlBottomBar.Controls.Add(lblTotalPrice);
-        pnlBottomBar.Controls.Add(btnContinuePayment);
 
-        this.Controls.Add(pnlHeader);
-        this.Controls.Add(pnlLeftInfo);
-        this.Controls.Add(pnlScreenArea);
-        if (_seatMapControl != null)
-        {
-            this.Controls.Add(_seatMapControl);
-        }
-
-        this.Controls.Add(pnlBottomBar);
-        this.ResumeLayout(false);
-
-        _timer = new System.Windows.Forms.Timer { Interval = 1000 };
-        _timer.Tick += (s, e) =>
-        {
-            if (lblClock != null && !lblClock.IsDisposed)
-                lblClock.Text = DateTime.Now.ToString("HH:mm:ss");
-        };
-        _timer.Start();
         Button btnExit = new Button
         {
             Text = "✕ THOÁT",
@@ -167,24 +147,19 @@ public class FrmKioskSeat : Form
             Size = new Size(100, 38),
             Location = new Point(1780, 21),
             Cursor = Cursors.Hand
-            };
+        };
         btnExit.FlatAppearance.BorderSize = 0;
         btnExit.Click += (s, e) =>
         {
-            Form mainForm = Application.OpenForms.Cast<Form>().FirstOrDefault(f => f.Name == "FrmMain" || f.Name == "FrmRoleSelection" || f.Tag?.ToString() == "Main");
-            if (mainForm != null)
-            {
-                mainForm.Show();
-            }
+            Form? mainForm = Application.OpenForms.Cast<Form>()
+                .FirstOrDefault(f => f.Name == "FrmMain" || f.Name == "FrmRoleSelection" || f.Tag?.ToString() == "Main");
+            mainForm?.Show();
             this.Close();
         };
-        pnlHeader.Controls.Add(lblLogo);
-        pnlHeader.Controls.Add(lblStep1);
-        pnlHeader.Controls.Add(lblStep2);
-        pnlHeader.Controls.Add(lblStep3);
-        pnlHeader.Controls.Add(lblClock);
-        pnlHeader.Controls.Add(btnBack);
-        pnlHeader.Controls.Add(btnExit);
+
+        pnlHeader.Controls.AddRange(new Control[] { lblLogo, lblStep1, lblStep2, lblStep3, lblClock, btnBack, btnExit });
+
+        // 2. LEFT INFO PANEL
         pnlLeftInfo = new Panel
         {
             Size = new Size(380, 876),
@@ -200,16 +175,18 @@ public class FrmKioskSeat : Form
             AutoSize = true,
             MaximumSize = new Size(340, 0)
         };
+
         lblShowtimeInfo = new Label
         {
             Font = new Font("Segoe UI", 10F),
             ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
-            Location = new Point(20, 80),
+            Location = new Point(20, 95),
             AutoSize = true
         };
+
         Panel pnlLegend = new Panel
         {
-            Location = new Point(20, 200),
+            Location = new Point(20, 210),
             Size = new Size(340, 180),
             BackColor = ColorTranslator.FromHtml("#181c20")
         };
@@ -223,20 +200,20 @@ public class FrmKioskSeat : Form
             AutoSize = true
         };
         pnlLegend.Controls.Add(lblLegendTitle);
-        AddLegendItem(pnlLegend, "#181c20", "Ghế trống (Standard)", 50);
+        AddLegendItem(pnlLegend, "#222930", "Ghế trống (Standard)", 50);
         AddLegendItem(pnlLegend, "#ffb961", "Ghế bạn đang chọn", 90);
         AddLegendItem(pnlLegend, "#334155", "Ghế đã có người đặt", 130);
 
-        pnlLeftInfo.Controls.Add(lblMovieTitle);
-        pnlLeftInfo.Controls.Add(lblShowtimeInfo);
-        pnlLeftInfo.Controls.Add(pnlLegend);
-        
+        pnlLeftInfo.Controls.AddRange(new Control[] { lblMovieTitle, lblShowtimeInfo, pnlLegend });
+
+        // 3. SCREEN & SEAT AREA
         pnlScreenArea = new Panel
         {
             Size = new Size(1468, 876),
             Location = new Point(428, 96),
             BackColor = ColorTranslator.FromHtml("#101418")
         };
+
         Label lblScreen = new Label
         {
             Text = "M À N   H Ì N H   C H I Ế U   ( S C R E E N )",
@@ -247,17 +224,9 @@ public class FrmKioskSeat : Form
             Size = new Size(1000, 40),
             Location = new Point(234, 20)
         };
-
-        pnlSeatGrid = new FlowLayoutPanel
-        {
-            Size = new Size(1100, 750),
-            Location = new Point(184, 90),
-            AutoScroll = true,
-            BackColor = ColorTranslator.FromHtml("#101418")
-        };
-
         pnlScreenArea.Controls.Add(lblScreen);
-        pnlScreenArea.Controls.Add(pnlSeatGrid);
+
+        // 4. BOTTOM BAR
         pnlBottomBar = new Panel
         {
             Size = new Size(1920, 84),
@@ -282,6 +251,7 @@ public class FrmKioskSeat : Form
             Location = new Point(1100, 26),
             AutoSize = true
         };
+
         btnContinuePayment = new Button
         {
             Text = "CHỌN BẮP NƯỚC →",
@@ -310,26 +280,25 @@ public class FrmKioskSeat : Form
                 }
                 else
                 {
-                    MessageBox.Show("Rất tiếc, một số ghế bạn chọn vừa bị giữ bởi khách hàng khác. Vui lòng chọn ghế khác!", "CineLuxe Kiosk", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show("Rất tiếc, một số ghế bạn chọn vừa bị giữ bởi khách hàng khác. Vui lòng chọn ghế khác!",
+                        "CineLuxe Kiosk", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     _seatMapControl?.LoadSeatMap(_showtimeId);
                 }
-                
-                }
+            }
             else
             {
-                MessageBox.Show("Vui lòng chọn ít nhất 1 ghế trước khi tiếp tục!", "CineLuxe Kiosk", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Vui lòng chọn ít nhất 1 ghế trước khi tiếp tục!",
+                    "CineLuxe Kiosk", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         };
-        
-        pnlBottomBar.Controls.Add(lblSelectedSeats);
-        pnlBottomBar.Controls.Add(lblTotalPrice);
-        pnlBottomBar.Controls.Add(btnContinuePayment);
 
-        this.Controls.Add(pnlHeader);
-        this.Controls.Add(pnlLeftInfo);
-        this.Controls.Add(pnlScreenArea);
-        this.Controls.Add(pnlBottomBar);
+        pnlBottomBar.Controls.AddRange(new Control[] { lblSelectedSeats, lblTotalPrice, btnContinuePayment });
+
+        // ADD ALL PANELS TO FORM
+        this.Controls.AddRange(new Control[] { pnlHeader, pnlLeftInfo, pnlScreenArea, pnlBottomBar });
         this.ResumeLayout(false);
+
+        // TIMER
         _timer = new System.Windows.Forms.Timer { Interval = 1000 };
         _timer.Tick += (s, e) =>
         {
@@ -337,7 +306,9 @@ public class FrmKioskSeat : Form
                 lblClock.Text = DateTime.Now.ToString("HH:mm:ss");
         };
         _timer.Start();
+        this.FormClosed += (_, _) => _timer.Dispose();
     }
+
     private void AddLegendItem(Panel container, string hexColor, string text, int top)
     {
         Panel box = new Panel
@@ -357,84 +328,26 @@ public class FrmKioskSeat : Form
         container.Controls.Add(box);
         container.Controls.Add(lbl);
     }
+
     private void LoadShowtimeDetails()
     {
         using var db = new CinemaDbContext();
-        var showtime = db.Showtimes.FirstOrDefault(s => s.ShowtimeId == _showtimeId);
+        var showtime = db.Showtimes
+            .Include(s => s.Movie)
+            .Include(s => s.Room)
+            .FirstOrDefault(s => s.ShowtimeId == _showtimeId);
+
         if (showtime != null)
         {
-            var movie = db.Movies.FirstOrDefault(m => m.MovieId == showtime.MovieId);
-            if (movie != null)
-            {
-                lblMovieTitle.Text = movie.Title.ToUpper();
-                lblShowtimeInfo.Text = $"Suất: {showtime.StartTime:HH:mm - dd/MM/yyyy}\nPhòng chiếu: {showtime.RoomId}\nGiá vé: {_seatPrice:N0} đ/ghế";
-            }
-        }
-    }
-    private void RenderSeatMap()
-    {
-        pnlSeatGrid.Controls.Clear();
-        string[] rows = { "A", "B", "C", "D", "E", "F", "G", "H" };
-        int cols = 10;
-        
-        List<string> bookedSeats = new List<string> { "A3", "A4", "C5", "C6", "E1", "E2" };
+            _movieId = showtime.MovieId;
+            if (showtime.Price > 0) _seatPrice = showtime.Price;
 
-        foreach (var row in rows)
-        {
-            for (int col = 1; col <= cols; col++)
-            {
-                string seatCode = $"{row}{col}";
-                bool isBooked = bookedSeats.Contains(seatCode);
+            string movieTitle = showtime.Movie?.Title ?? "PHIM CHIẾU RẠP";
+            string roomName = showtime.Room?.RoomName ?? $"Phòng {showtime.RoomId}";
 
-                Button btnSeat = new Button
-                {
-                    Text = seatCode,
-                    Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                    Size = new Size(85, 65),
-                    Margin = new Padding(8),
-                    FlatStyle = FlatStyle.Flat,
-                    Tag = seatCode
-                };
-                if (isBooked)
-                {
-                    btnSeat.BackColor = ColorTranslator.FromHtml("#334155");
-                    btnSeat.ForeColor = ColorTranslator.FromHtml("#64748b");
-                    btnSeat.Enabled = false;
-                    btnSeat.FlatAppearance.BorderSize = 0;
-                }
-                else
-                {
-                    btnSeat.BackColor = ColorTranslator.FromHtml("#181c20");
-                    btnSeat.ForeColor = Color.White;
-                    btnSeat.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#334155");
-                    btnSeat.Cursor = Cursors.Hand;
-
-                    btnSeat.Click += (s, e) =>
-                    {
-                        ToggleSeatSelection(btnSeat, seatCode);
-                    };
-                }
-                pnlSeatGrid.Controls.Add(btnSeat);
-            }
-            pnlSeatGrid.SetFlowBreak(pnlSeatGrid.Controls[pnlSeatGrid.Controls.Count - 1], true);
+            lblMovieTitle.Text = movieTitle.ToUpper();
+            lblShowtimeInfo.Text = $"Suất: {showtime.StartTime:HH:mm - dd/MM/yyyy}\nPhòng chiếu: {roomName}\nGiá vé: {_seatPrice:N0} đ/ghế";
         }
-    }
-
-    private void ToggleSeatSelection(Button btnSeat, string seatCode)
-    {
-        if (_selectedSeats.Contains(seatCode))
-        {
-            _selectedSeats.Remove(seatCode);
-            btnSeat.BackColor = ColorTranslator.FromHtml("#181c20");
-            btnSeat.ForeColor = Color.White;
-        }
-        else
-        {
-            _selectedSeats.Add(seatCode);
-            btnSeat.BackColor = ColorTranslator.FromHtml("#ffb961");
-            btnSeat.ForeColor = ColorTranslator.FromHtml("#101418");
-        }
-        UpdateSummary();
     }
     private void UpdateSummary()
     {
