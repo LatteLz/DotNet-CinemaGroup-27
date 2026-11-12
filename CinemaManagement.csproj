@@ -18,10 +18,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Forms\Kiosk\" />
       <Folder Include="Forms\Staff\" />
       <Folder Include="Helpers\" />
-      <Folder Include="Services\" />
     </ItemGroup>
 
     <ItemGroup>
@@ -44,6 +42,15 @@
         <SubType>Form</SubType>
       </Compile>
       <Compile Update="Forms\Staff\FrmLogin.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Admin\FrmMovieDetail.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Admin\FrmAdminRoom.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Admin\FrmAdminShowtimes.cs">
         <SubType>Form</SubType>
       </Compile>
     </ItemGroup>

@@ -1,142 +1,298 @@
 ﻿using System;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
-using System;
-using System.Drawing;
-using System.Windows.Forms;
+using CinemaManagement.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace CinemaManagement.Forms.Admin
 {
     public partial class FrmAdminDashboard : Form
     {
-        private Panel pnlSidebar;
-        private Panel pnlHeader;
-        private Panel pnlContent;
-        private Panel pnlFooter;
+        private Panel pnlSidebar = null!;
+        private Panel pnlHeader = null!;
+        private Panel pnlContent = null!;
+        private Panel pnlFooter = null!;
+
+        private Label lblRevenueValue = null!;
+        private Label lblRevenueSub = null!;
+        private Label lblTicketsValue = null!;
+        private Label lblTicketsSub = null!;
+        private Label lblOccupancyValue = null!;
+        private Label lblOccupancySub = null!;
+        private Label lblShowtimesValue = null!;
+        private Label lblShowtimesSub = null!;
 
         public FrmAdminDashboard()
         {
             InitializeComponent();
             SetupDashboardLayout();
+            LoadRealtimeKpiData();
         }
 
         private void SetupDashboardLayout()
         {
-            this.Width = 1280;
-            this.Height = 720;
-            this.StartPosition=FormStartPosition.CenterScreen;
-            this.Text = "Cinema Management System";
-            this.BackColor=ColorTranslator.FromHtml("#101418");
-            this.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            
-            pnlSidebar=new Panel();
-            pnlSidebar.Dock = DockStyle.Left;
-            pnlSidebar.Width = 256;
-            pnlSidebar.BackColor= ColorTranslator.FromHtml("#0B0F12");
-            this.Controls.Add(pnlSidebar);
+            Width = 1280;
+            Height = 720;
+            StartPosition = FormStartPosition.CenterScreen;
+            Text = "CineLuxe - Cinema Management System";
+            BackColor = ColorTranslator.FromHtml("#101418");
+            Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
 
-            AddSidebarMenuButton("Quản lý danh mục phim ", 100);
-            AddSidebarMenuButton("Chi tiết phim", 150);
-            AddSidebarMenuButton("Cấu hình phòng chiếu", 200);
-            AddSidebarMenuButton("Lịch chiếu phim", 250);
+            pnlSidebar = new Panel
+            {
+                Dock = DockStyle.Left,
+                Width = 256,
+                BackColor = ColorTranslator.FromHtml("#0B0F12")
+            };
+            Controls.Add(pnlSidebar);
 
-            pnlHeader = new Panel();
-            pnlHeader.Dock = DockStyle.Top;
-            pnlHeader.Height = 48;
-            pnlHeader.BackColor = ColorTranslator.FromHtml("#0B0F12");
-            this.Controls.Add(pnlHeader);
-            
-            Label lblTitle = new Label();
-            lblTitle.Text = "ADMIN_DASHBOARD.CS";
-            lblTitle.ForeColor=ColorTranslator.FromHtml("#CBD5E1");
-            lblTitle.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-            lblTitle.Location = new Point(20, 12);
-            lblTitle.AutoSize = true;
+            AddSidebarMenuButton("Chọn vai trò", 50, "ROLE_SELECT", false);
+            AddSidebarMenuButton("Bảng điều khiển", 100, "DASHBOARD", true);
+            AddSidebarMenuButton("Quản lý danh mục phim", 150, "MOVIES", false);
+            AddSidebarMenuButton("Chi tiết phim", 200, "MOVIE_DETAIL", false);
+            AddSidebarMenuButton("Cấu hình phòng chiếu", 250, "ROOMS", false);
+            AddSidebarMenuButton("Lịch chiếu phim", 300, "SHOWTIMES", false);
+
+            pnlHeader = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 48,
+                BackColor = ColorTranslator.FromHtml("#0B0F12")
+            };
+            Controls.Add(pnlHeader);
+
+            Label lblTitle = new Label
+            {
+                Text = "BẢNG ĐIỀU HÀNH TỔNG QUAN (ADMIN DASHBOARD)",
+                ForeColor = ColorTranslator.FromHtml("#CBD5E1"),
+                Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+                Location = new Point(20, 12),
+                AutoSize = true
+            };
             pnlHeader.Controls.Add(lblTitle);
-            
-            pnlFooter = new Panel();
-            pnlFooter.Dock = DockStyle.Bottom;
-            pnlFooter.Height = 32;
-            pnlFooter.BackColor = ColorTranslator.FromHtml("#0B0F12");
-            this.Controls.Add(pnlFooter);
 
-            Label lblFooterStatus = new Label();
-            lblFooterStatus.Text = "PROJECTION ENGINE:  READY   |   SQLite Connected: cineluxe_core.db (v3.42)";
-            lblFooterStatus.ForeColor = ColorTranslator.FromHtml("#94A3B8");
-            lblFooterStatus.Font = new Font("JetBrains Mono", 9F, FontStyle.Regular);
-            lblFooterStatus.Location = new Point(15, 8);
-            lblFooterStatus.AutoSize = true;
+            pnlFooter = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 32,
+                BackColor = ColorTranslator.FromHtml("#0B0F12")
+            };
+            Controls.Add(pnlFooter);
+
+            Label lblFooterStatus = new Label
+            {
+                Text = "PROJECTION ENGINE: ONLINE   |   Database: SQLite (cinema.db)",
+                ForeColor = ColorTranslator.FromHtml("#94A3B8"),
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular),
+                Location = new Point(15, 8),
+                AutoSize = true
+            };
             pnlFooter.Controls.Add(lblFooterStatus);
-            pnlContent = new Panel();
-            pnlContent.Dock = DockStyle.Fill;
-            pnlContent.BackColor = ColorTranslator.FromHtml("#101418");
-            pnlContent.AutoScroll = true;
-            this.Controls.Add(pnlContent);
+
+            pnlContent = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = ColorTranslator.FromHtml("#101418"),
+                AutoScroll = true
+            };
+            Controls.Add(pnlContent);
+
             CreateKpiCards();
         }
 
-        private void AddSidebarMenuButton(string text, int topPosition)
+        private void AddSidebarMenuButton(string text, int topPosition, string menuKey, bool isActive)
         {
-            Button btn = new Button();
-            btn.Text = text;
-            btn.Width = 220;
-            btn.Height = 40;
-            btn.Location = new Point(18, topPosition);
-            btn.FlatStyle = FlatStyle.Flat;
+            Color backCol = isActive ? ColorTranslator.FromHtml("#0284C7") : ColorTranslator.FromHtml("#181C20");
+            Button btn = new Button
+            {
+                Text = text,
+                Tag = menuKey,
+                Width = 220,
+                Height = 40,
+                Location = new Point(18, topPosition),
+                FlatStyle = FlatStyle.Flat,
+                ForeColor = ColorTranslator.FromHtml("#CBD5E1"),
+                BackColor = backCol,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font("Segoe UI", 10F, isActive ? FontStyle.Bold : FontStyle.Regular),
+                Cursor = Cursors.Hand
+            };
             btn.FlatAppearance.BorderSize = 0;
-            btn.ForeColor = ColorTranslator.FromHtml("#CBD5E1");
-            btn.BackColor = ColorTranslator.FromHtml("#181C20");
-            btn.TextAlign = ContentAlignment.MiddleLeft;
-            btn.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-            btn.MouseEnter += (s, e) => btn.BackColor = ColorTranslator.FromHtml("#282E35");
-            btn.MouseLeave += (s, e) => btn.BackColor = ColorTranslator.FromHtml("#181C20");
+
+            if (!isActive)
+            {
+                btn.MouseEnter += (_, _) => btn.BackColor = ColorTranslator.FromHtml("#282E35");
+                btn.MouseLeave += (_, _) => btn.BackColor = backCol;
+            }
+            btn.Click += OnMenuButtonClick;
 
             pnlSidebar.Controls.Add(btn);
         }
 
-        private void CreateKpiCards()
+        private void OnMenuButtonClick(object? sender, EventArgs e)
         {
-            Panel card1 = CreateMetricCard("DOANH THU HÔM NAY", "48.750.000 đ", "+18.4% vs hôm qua", 24, 20);
-            pnlContent.Controls.Add(card1);
-            Panel card2 = CreateMetricCard("SỐ VÉ ĐÃ BÁN", "582 / 650 VÉ", "Tiến độ ngày: 89.5%", 314, 20);
-            pnlContent.Controls.Add(card2);
-            Panel card3 = CreateMetricCard("TỶ LỆ LẤP ĐẦY RẠP", "78.5%", "+6.2% chu kỳ tuần", 604, 20);
-            pnlContent.Controls.Add(card3);
-            Panel card4 = CreateMetricCard("SUẤT CHIẾU HOẠT ĐỘNG", "24 / 26 SUẤT", "2 suất chờ khởi chiếu", 894, 20);
-            pnlContent.Controls.Add(card4);
+            if (sender is Button { Tag: string menuKey })
+            {
+                try
+                {
+                    switch (menuKey)
+                    {
+                        case "ROLE_SELECT":
+                            Close();
+                            break;
+
+                        case "DASHBOARD":
+                            LoadRealtimeKpiData();
+                            break;
+
+                        case "MOVIES":
+                            NavigateTo(new FrmAdminMovies());
+                            break;
+
+                        case "MOVIE_DETAIL":
+                            MessageBox.Show("Vui lòng chọn một phim cụ thể từ danh mục phim để xem chi tiết!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            break;
+
+                        case "ROOMS":
+                            NavigateTo(new FrmAdminRooms());
+                            break;
+
+                        case "SHOWTIMES":
+                            NavigateTo(new FrmAdminShowtimes());
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Lỗi không thể mở màn hình:\n{ex.Message}\n\nChi tiết:\n{ex.InnerException?.Message}",
+                        "Lỗi Hệ Thống", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
         }
 
-        private Panel CreateMetricCard(string title, string value, string subtitle, int left, int top)
+        private void NavigateTo(Form targetForm)
         {
-            Panel panel = new Panel();
-            panel.Width = 266;
-            panel.Height = 110;
-            panel.Location = new Point(left, top);
-            panel.BackColor = ColorTranslator.FromHtml("#181C20");
-            Label lblTitle = new Label();
-            lblTitle.Text = title;
-            lblTitle.ForeColor = ColorTranslator.FromHtml("#94A3B8");
-            lblTitle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            lblTitle.Location = new Point(16, 14);
-            lblTitle.AutoSize = true;
+            targetForm.StartPosition = FormStartPosition.CenterScreen;
+            targetForm.FormClosed += (_, _) =>
+            {
+                if (!this.IsDisposed)
+                {
+                    this.Show();
+                    LoadRealtimeKpiData();
+                }
+            };
+            this.Hide();
+            targetForm.Show();
+        }
+
+        private void CreateKpiCards()
+        {
+            Panel card1 = CreateMetricCard("DOANH THU HÔM NAY", out lblRevenueValue, out lblRevenueSub, 24, 20);
+            Panel card2 = CreateMetricCard("SỐ VÉ ĐÃ BÁN HÔM NAY", out lblTicketsValue, out lblTicketsSub, 314, 20);
+            Panel card3 = CreateMetricCard("TỶ LỆ LẤP ĐẦY RẠP", out lblOccupancyValue, out lblOccupancySub, 604, 20);
+            Panel card4 = CreateMetricCard("SUẤT CHIẾU HÔM NAY", out lblShowtimesValue, out lblShowtimesSub, 894, 20);
+
+            pnlContent.Controls.AddRange(new Control[] { card1, card2, card3, card4 });
+        }
+
+        private Panel CreateMetricCard(string title, out Label valLabel, out Label subLabel, int left, int top)
+        {
+            Panel panel = new Panel
+            {
+                Width = 266,
+                Height = 110,
+                Location = new Point(left, top),
+                BackColor = ColorTranslator.FromHtml("#181C20")
+            };
+
+            Label lblTitle = new Label
+            {
+                Text = title,
+                ForeColor = ColorTranslator.FromHtml("#94A3B8"),
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                Location = new Point(16, 14),
+                AutoSize = true
+            };
             panel.Controls.Add(lblTitle);
-            Label lblValue = new Label();
-            lblValue.Text = value;
-            lblValue.ForeColor = ColorTranslator.FromHtml("#F39C12"); 
-            lblValue.Font = new Font("Segoe UI", 16F, FontStyle.Bold);
-            lblValue.Location = new Point(14, 38);
-            lblValue.AutoSize = true;
-            panel.Controls.Add(lblValue);
-            Label lblSub = new Label();
-            lblSub.Text = subtitle;
-            lblSub.ForeColor = ColorTranslator.FromHtml("#CBD5E1");
-            lblSub.Font = new Font("Segoe UI", 8.5F, FontStyle.Regular);
-            lblSub.Location = new Point(16, 78);
-            lblSub.AutoSize = true;
-            panel.Controls.Add(lblSub);
+
+            valLabel = new Label
+            {
+                Text = "0",
+                ForeColor = ColorTranslator.FromHtml("#F39C12"),
+                Font = new Font("Segoe UI", 15F, FontStyle.Bold),
+                Location = new Point(14, 38),
+                AutoSize = true
+            };
+            panel.Controls.Add(valLabel);
+
+            subLabel = new Label
+            {
+                Text = "Đang tải dữ liệu...",
+                ForeColor = ColorTranslator.FromHtml("#CBD5E1"),
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
+                Location = new Point(16, 78),
+                AutoSize = true
+            };
+            panel.Controls.Add(subLabel);
 
             return panel;
         }
+
+        private void LoadRealtimeKpiData()
+        {
+            try
+            {
+                using var db = new CinemaDbContext();
+                DateTime today = DateTime.Today;
+                DateTime tomorrow = today.AddDays(1);
+
+                decimal todayRevenue = db.Tickets
+                    .Include(t => t.Booking)
+                    .Where(t => t.Booking != null && t.Booking.CreatedAt >= today && t.Booking.CreatedAt < tomorrow)
+                    .Sum(t => t.Price);
+
+                lblRevenueValue.Text = todayRevenue > 0 ? $"{todayRevenue:N0} đ" : "0 đ";
+                lblRevenueSub.Text = "Cập nhật từ hệ thống vé";
+
+                int ticketsSoldToday = db.Tickets
+                    .Include(t => t.Showtime)
+                    .Count(t => t.Showtime != null && t.Showtime.StartTime >= today && t.Showtime.StartTime < tomorrow);
+
+                int totalSeatsCapacityToday = db.Showtimes
+                    .Include(s => s.Room)
+                    .Where(s => s.StartTime >= today && s.StartTime < tomorrow && s.Room != null)
+                    .Sum(s => s.Room.TotalSeats);
+
+                lblTicketsValue.Text = totalSeatsCapacityToday > 0 
+                    ? $"{ticketsSoldToday} / {totalSeatsCapacityToday} VÉ" 
+                    : $"{ticketsSoldToday} VÉ";
+                lblTicketsSub.Text = $"Tiến độ: {(totalSeatsCapacityToday > 0 ? ((double)ticketsSoldToday / totalSeatsCapacityToday * 100).ToString("F1") : "0")}%";
+
+                double occupancyRate = totalSeatsCapacityToday > 0 
+                    ? ((double)ticketsSoldToday / totalSeatsCapacityToday) * 100 
+                    : 0;
+
+                lblOccupancyValue.Text = $"{occupancyRate:F1}%";
+                lblOccupancySub.Text = "Tính trên các suất chiếu hôm nay";
+
+                int totalTodayShowtimes = db.Showtimes
+                    .Count(s => s.StartTime >= today && s.StartTime < tomorrow);
+
+                int completedShowtimes = db.Showtimes
+                    .Count(s => s.StartTime >= today && s.StartTime < tomorrow && s.EndTime <= DateTime.Now);
+
+                lblShowtimesValue.Text = $"{totalTodayShowtimes} SUẤT";
+                lblShowtimesSub.Text = $"{completedShowtimes} suất đã hoàn thành";
+            }
+            catch
+            {
+                lblRevenueValue.Text = "0 đ";
+                lblTicketsValue.Text = "0 VÉ";
+                lblOccupancyValue.Text = "0.0%";
+                lblShowtimesValue.Text = "0 SUẤT";
+                lblRevenueSub.Text = lblTicketsSub.Text = lblOccupancySub.Text = lblShowtimesSub.Text = "CSDL sẵn sàng nhận dữ liệu";
+            }
+        }
     }
 }
-        

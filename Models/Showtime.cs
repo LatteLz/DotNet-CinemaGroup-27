@@ -12,19 +12,20 @@ namespace CinemaManagement.Models
 
         public int MovieId { get; set; }
 
-        [ForeignKey("MovieId")]
-        public virtual Movie Movie { get; set; } 
+        [ForeignKey(nameof(MovieId))]
+        public virtual Movie Movie { get; set; } = null!; 
 
         public int RoomId { get; set; }
 
-        [ForeignKey("RoomId")]
-        public virtual Room Room { get; set; } 
+        [ForeignKey(nameof(RoomId))]
+        public virtual Room Room { get; set; } = null!; 
 
         public DateTime StartTime { get; set; } 
 
-        public DateTime EndTime { get; set; } 
+        public DateTime? EndTime { get; set; } 
 
-        public decimal TicketPrice { get; set; }
+        [Column("Price")]
+        public decimal Price { get; set; }
         
         public virtual ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
         
