@@ -585,6 +585,13 @@ namespace CinemaManagement.Forms.Staff
                 this.Hide();
             };
 
+            lnkReports.LinkClicked += (s, e) =>
+            {
+                var reportsForm = new CinemaManagement.Forms.Admin.FrmAdminReports();
+                reportsForm.Show();
+                this.Hide();
+            };
+
             btnCheckout.Click += (s, e) =>
             {
                 decimal cashGiven = ParseMoney(txtCashGiven.Text);
