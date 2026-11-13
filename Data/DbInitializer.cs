@@ -5,30 +5,41 @@ using CinemaManagement.Helpers;
 
 namespace CinemaManagement.Data
 {
-    public static class DbInitializer
+public static class DbInitializer
+{
+    public static void Initialize(CinemaDbContext context)
     {
-        public static void Initialize(CinemaDbContext context)
+        context.Database.EnsureCreated();
+
+        if (!context.Users.Any())
         {
-            context.Database.EnsureCreated();
+            PasswordHelper.CreatePasswordHash("admin123", out string adminHash, out string adminSalt);
+            PasswordHelper.CreatePasswordHash("admin123", out string staffHash, out string staffSalt);
 
-            string adminEmail = "admin.director@cineluxe.vn";
-            var adminUser = context.Users.FirstOrDefault(u => u.Username == adminEmail);
-
-            if (adminUser == null)
-            {PasswordHelper.CreatePasswordHash("admin123", out string hash, out string salt);
-
-                context.Users.Add(new User
+            context.Users.AddRange(
+                new User
                 {
-                    Username = adminEmail,
+                    Username = "admin.director@cineluxe.vn",
                     Fullname = "Quản Trị Viên",
                     Role = "Admin",
-                    PasswordHash = hash,
-                    Salt = salt,
+                    PasswordHash = adminHash,
+                    Salt = adminSalt,
                     IsActive = true,
                     CreateAt = DateTime.Now
-                });
-                context.SaveChanges();
-            }
+                },
+                new User
+                {
+                    Username = "staff.pos@cineluxe.vn",
+                    Fullname = "Thảo Hân (Thu Ngân)",
+                    Role = "Staff",
+                    PasswordHash = staffHash,
+                    Salt = staffSalt,
+                    IsActive = true,
+                    CreateAt = DateTime.Now
+                }
+            );
+            context.SaveChanges();
         }
     }
+}
 }
