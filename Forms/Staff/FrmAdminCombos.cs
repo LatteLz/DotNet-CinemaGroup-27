@@ -2,7 +2,9 @@
 using System.Data.SQLite;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Windows.Forms;
+using CinemaManagement.Forms.Staff;
 
 namespace CinemaManagement.Forms.Staff
 {
@@ -22,6 +24,7 @@ namespace CinemaManagement.Forms.Staff
 
         private string connectionString = "Data Source=cinema.db;Version=3;";
         private string placeholderText = "🔍 Tìm kiếm SKU, tên combo...";
+        private ErrorProvider errorProvider = new ErrorProvider();
 
         public FrmAdminCombos()
         {
@@ -71,6 +74,17 @@ namespace CinemaManagement.Forms.Staff
                         txtSearch.Text = placeholderText;
                         txtSearch.ForeColor = ColorTextMuted;
                     }
+                    else
+                    {
+                        if (txtSearch.Text.Length < 2)
+                        {
+                            errorProvider.SetError(txtSearch, "Vui lòng nhập ít nhất 2 ký tự để tìm kiếm!");
+                        }
+                        else
+                        {
+                            errorProvider.SetError(txtSearch, string.Empty);
+                        }
+                    }
                 };
             }
         }
@@ -95,10 +109,27 @@ namespace CinemaManagement.Forms.Staff
                 };
             }
 
+            if (lnkReports != null)
+            {
+                lnkReports.LinkClicked += (s, e) => {
+                    FrmAdminReports reportsForm = new FrmAdminReports();
+                    reportsForm.Show();
+                    this.Hide();
+                };
+            }
+
             if (lnkCombo != null)
             {
                 lnkCombo.LinkClicked += (s, e) => {
-                    // Đang ở màn hình quản lý combo
+                };
+            }
+
+            if (lnkOccupancy != null)
+            {
+                lnkOccupancy.LinkClicked += (s, e) => {
+                    FrmOccupancyReport occupancyForm = new FrmOccupancyReport();
+                    occupancyForm.Show();
+                    this.Hide();
                 };
             }
         }
@@ -113,7 +144,34 @@ namespace CinemaManagement.Forms.Staff
 
         private void BtnAddComboTop_Click(object sender, EventArgs e)
         {
-            MessageBox.Show("Mở form thêm mới mặt hàng F&B / Combo bắp nước.", "Thêm Combo Mới", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            string name = Microsoft.VisualBasic.Interaction.InputBox("Nhập tên combo F&B mới:", "Thêm Combo Mới", "Combo Đặc Biệt");
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                errorProvider.SetError(btnAddComboTop, "Tên combo không được để trống!");
+                MessageBox.Show("Tên combo F&B không được để trống!", "Lỗi Dữ Liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            errorProvider.SetError(btnAddComboTop, string.Empty);
+
+            try
+            {
+                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
+                {
+                    conn.Open();
+                    string query = "INSERT INTO ComboItems (ComboName, Price, ImagePath) VALUES (@name, 99000, 'Bắp nước tiêu chuẩn');";
+                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@name", name);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+                LoadDataFromDb();
+                MessageBox.Show("Thêm combo mới thành công!", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi khi thêm vào CSDL: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void BtnUpdatePrice_Click(object sender, EventArgs e)
@@ -121,10 +179,12 @@ namespace CinemaManagement.Forms.Staff
             if (dgvCombos.SelectedRows.Count > 0)
             {
                 string sku = dgvCombos.SelectedRows[0].Cells[0].Value?.ToString() ?? "";
+                errorProvider.Clear();
                 MessageBox.Show($"Mở giao diện cập nhật giá sỉ/lẻ cho mã mặt hàng: {sku}", "Cập Nhật Giá", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else
             {
+                errorProvider.SetError(btnUpdatePrice, "Chưa chọn dòng dữ liệu!");
                 MessageBox.Show("Vui lòng chọn một dòng sản phẩm trên bảng để cập nhật giá.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
@@ -136,7 +196,38 @@ namespace CinemaManagement.Forms.Staff
 
         private void BtnExportExcel_Click(object sender, EventArgs e)
         {
-            MessageBox.Show("Đã xuất dữ liệu danh mục Combo & Kho F&B ra file Excel thành công!", "Xuất Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            using (SaveFileDialog sfd = new SaveFileDialog())
+            {
+                sfd.Filter = "CSV File (*.csv)|*.csv|All Files (*.*)|*.*";
+                sfd.FileName = "Cineluxe_Combo_Inventory_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv";
+                if (sfd.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        using (StreamWriter sw = new StreamWriter(sfd.FileName, false, System.Text.Encoding.UTF8))
+                        {
+                            sw.WriteLine("MA SKU,TEN MON / COMBO,PHAN LOAI,GIA VON,GIA NIEM YET,TON");
+                            foreach (DataGridViewRow row in dgvCombos.Rows)
+                            {
+                                if (row.IsNewRow) continue;
+                                string sku = row.Cells[0].Value?.ToString() ?? "";
+                                string nameDesc = row.Cells[2].Value?.ToString() ?? "";
+                                string cat = row.Cells[3].Value?.ToString().Split('|')[0] ?? "";
+                                string cost = row.Cells[4].Value?.ToString() ?? "";
+                                string retail = row.Cells[5].Value?.ToString() ?? "";
+                                string stock = row.Cells[6].Value?.ToString() ?? "";
+
+                                sw.WriteLine($"\"{sku}\",\"{nameDesc}\",\"{cat}\",\"{cost}\",\"{retail}\",\"{stock}\"");
+                            }
+                        }
+                        MessageBox.Show("Đã xuất dữ liệu danh mục Combo & Kho F&B ra file thành công!\nĐường dẫn: " + sfd.FileName, "Xuất Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Lỗi khi xuất file: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
         }
 
         private void LoadDataFromDb()

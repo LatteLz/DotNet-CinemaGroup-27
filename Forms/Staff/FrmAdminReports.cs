@@ -1,10 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data.SQLite;
 using System.Drawing;
 using System.Globalization;
+using System.IO;
 using System.Windows.Forms;
+using CinemaManagement.Forms.Staff;
 
-namespace CinemaManagement.Forms.Admin
+namespace CinemaManagement.Forms.Staff
 {
     public partial class FrmAdminReports : Form
     {
@@ -17,207 +20,133 @@ namespace CinemaManagement.Forms.Admin
 
         private string connectionString = "Data Source=cinema.db;Version=3;";
         private Panel[] kpiCards = new Panel[4];
+        private ErrorProvider errorProvider = new ErrorProvider();
 
         public FrmAdminReports()
         {
             InitializeComponent();
-            InitializeComponentCustom();
+            InitializeCustomEvents();
             LoadRealDataFromDatabase();
         }
 
-        private void InitializeComponentCustom()
+        private void InitializeCustomEvents()
         {
-            this.Text = "CINELUXE MANAGEMENT STUDIO - BÁO CÁO TÀI CHÍNH & DOANH THU";
-            this.Size = new Size(1440, 900);
-            this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = ColorBg;
             this.ForeColor = Color.White;
-            this.FormBorderStyle = FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
 
-            BuildSidebar();
-            BuildHeader();
-            BuildFilterBar();
-            BuildKpiCards();
-            BuildChartsContainer();
-            BuildDataGridViewCustom();
-            BuildFooterStatus();
+            if (lnkPos != null)
+            {
+                lnkPos.LinkClicked += (s, e) => {
+                    var posForm = new FrmStaffPOS();
+                    posForm.Show();
+                    this.Hide();
+                };
+            }
+
+            if (lnkCombo != null)
+            {
+                lnkCombo.LinkClicked += (s, e) => {
+                    var comboForm = new FrmAdminCombos();
+                    comboForm.Show();
+                    this.Hide();
+                };
+            }
+
+            if (lnkReports != null)
+            {
+                lnkReports.LinkClicked += (s, e) => { };
+            }
+
+            if (lnkOccupancy != null)
+            {
+                lnkOccupancy.LinkClicked += (s, e) => {
+                    var occupancyForm = new FrmOccupancyReport();
+                    occupancyForm.Show();
+                    this.Hide();
+                };
+            }
+
+            if (lnkUsers != null)
+            {
+                lnkUsers.LinkClicked += (s, e) => {
+                    var usersForm = new FrmAdminUsers();
+                    usersForm.Show();
+                    this.Hide();
+                };
+            }
+
+            if (btnQuery != null)
+            {
+                btnQuery.Click += (s, e) => {
+                    errorProvider.Clear();
+                    LoadRealDataFromDatabase();
+                    MessageBox.Show("Đã truy vấn dữ liệu tài chính & doanh thu mới nhất từ CSDL.", "Truy Vấn", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                };
+            }
+
+            if (btnRefresh != null)
+            {
+                btnRefresh.Click += (s, e) => {
+                    errorProvider.Clear();
+                    LoadRealDataFromDatabase();
+                    MessageBox.Show("Làm mới dữ liệu báo cáo thành công!", "Làm Mới", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                };
+            }
+
+            if (btnExportExcel != null)
+            {
+                btnExportExcel.Click += (s, e) => {
+                    if (dgvReports.Rows.Count == 0)
+                    {
+                        errorProvider.SetError(btnExportExcel, "Không có dữ liệu để xuất file báo cáo!");
+                        MessageBox.Show("Không có dữ liệu báo cáo để xuất file.", "Cảnh Báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                    errorProvider.SetError(btnExportExcel, string.Empty);
+
+                    using (SaveFileDialog sfd = new SaveFileDialog())
+                    {
+                        sfd.Filter = "CSV File (*.csv)|*.csv|All Files (*.*)|*.*";
+                        sfd.FileName = "Cineluxe_Financial_Report_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv";
+                        if (sfd.ShowDialog() == DialogResult.OK)
+                        {
+                            try
+                            {
+                                using (StreamWriter sw = new StreamWriter(sfd.FileName, false, System.Text.Encoding.UTF8))
+                                {
+                                    sw.WriteLine("STT,TEN PHIM / COMBO,PHAN LOAI,SUAT CHIEU,TONG VE,LAP DAY TB,DOANH THU (VND),THOI GIAN GIAO DICH");
+                                    foreach (DataGridViewRow row in dgvReports.Rows)
+                                    {
+                                        if (row.IsNewRow) continue;
+                                        string stt = row.Cells[0].Value?.ToString() ?? "";
+                                        string name = row.Cells[1].Value?.ToString() ?? "";
+                                        string cat = row.Cells[2].Value?.ToString() ?? "";
+                                        string showtime = row.Cells[3].Value?.ToString() ?? "";
+                                        string tickets = row.Cells[4].Value?.ToString() ?? "";
+                                        string occupancy = row.Cells[5].Value?.ToString() ?? "";
+                                        string revenue = row.Cells[6].Value?.ToString() ?? "";
+                                        string time = row.Cells[7].Value?.ToString() ?? "";
+
+                                        sw.WriteLine($"\"{stt}\",\"{name}\",\"{cat}\",\"{showtime}\",\"{tickets}\",\"{occupancy}\",\"{revenue}\",\"{time}\"");
+                                    }
+                                }
+                                MessageBox.Show("Xuất file báo cáo tài chính thành công!\nĐường dẫn: " + sfd.FileName, "Xuất Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show("Lỗi khi xuất file: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
+                    }
+                };
+            }
+
+            BuildKpiCardsDynamic();
+            StyleDataGridView();
         }
 
-        private void BuildSidebar()
+        private void BuildKpiCardsDynamic()
         {
-            pnlSidebar = new Panel
-            {
-                Dock = DockStyle.Left,
-                Size = new Size(220, 900),
-                BackColor = ColorSurface
-            };
-
-            lblLogo = new Label
-            {
-                Text = "CINELUXE",
-                Font = new Font("Segoe UI", 13F, FontStyle.Bold),
-                ForeColor = Color.White,
-                Location = new Point(20, 20),
-                Size = new Size(180, 30)
-            };
-            pnlSidebar.Controls.Add(lblLogo);
-
-            lnkPos = CreateSidebarLink("Bán Vé Quầy POS", 80, (s, e) => { });
-            lnkCombo = CreateSidebarLink("Quản Lý Combo F&B", 130, (s, e) => { });
-            lnkReports = CreateSidebarLink("Tài Chính & Doanh Thu", 180, (s, e) => { });
-            lnkOccupancy = CreateSidebarLink("Lấp đầy Khán Phòng", 230, (s, e) => { });
-            lnkAbout = CreateSidebarLink("Cấu Hình & Giới Thiệu", 280, (s, e) => { });
-
-            lnkReports.LinkColor = ColorTranslator.FromHtml("#38bdf8");
-
-            lblUser = new Label
-            {
-                Text = "Julian Vance\nQuản Lý Trưởng",
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = ColorTextMuted,
-                Location = new Point(20, 820),
-                Size = new Size(180, 40)
-            };
-            pnlSidebar.Controls.Add(lblUser);
-
-            this.Controls.Add(pnlSidebar);
-        }
-
-        private LinkLabel CreateSidebarLink(string text, int top, LinkLabelLinkClickedEventHandler onClick)
-        {
-            var lnk = new LinkLabel
-            {
-                Text = text,
-                Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
-                LinkColor = ColorTextMuted,
-                ActiveLinkColor = ColorTranslator.FromHtml("#38bdf8"),
-                VisitedLinkColor = ColorTextMuted,
-                Location = new Point(20, top),
-                Size = new Size(180, 25),
-                TabStop = true
-            };
-            lnk.LinkClicked += onClick;
-            pnlSidebar.Controls.Add(lnk);
-            return lnk;
-        }
-
-        private void BuildHeader()
-        {
-            pnlHeader = new Panel
-            {
-                Location = new Point(220, 0),
-                Size = new Size(1220, 48),
-                BackColor = ColorSurface
-            };
-
-            lblBreadcrumb = new Label
-            {
-                Text = "BÁN VÉ POS / KHO COMBO / BÁO CÁO DOANH THU",
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = ColorTextMuted,
-                Location = new Point(20, 15),
-                AutoSize = true
-            };
-            pnlHeader.Controls.Add(lblBreadcrumb);
-
-            lblShift = new Label
-            {
-                Text = "SHIFT: MORNING (A)",
-                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
-                ForeColor = ColorAccentAmber,
-                Location = new Point(780, 15),
-                AutoSize = true
-            };
-            pnlHeader.Controls.Add(lblShift);
-
-            btnRefresh = CreateHeaderButton("Refresh", 940, (s, e) => LoadRealDataFromDatabase());
-            btnHelp = CreateHeaderButton("Help", 1030, (s, e) => { });
-
-            this.Controls.Add(pnlHeader);
-        }
-
-        private Button CreateHeaderButton(string text, int left, EventHandler onClick)
-        {
-            var btn = new Button
-            {
-                Text = text,
-                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
-                BackColor = ColorCardBg,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Location = new Point(left, 10),
-                Size = new Size(80, 28)
-            };
-            btn.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#242b33");
-            btn.Click += onClick;
-            pnlHeader.Controls.Add(btn);
-            return btn;
-        }
-
-        private void BuildFilterBar()
-        {
-            pnlFilterBar = new Panel
-            {
-                Location = new Point(240, 60),
-                Size = new Size(1180, 65),
-                BackColor = ColorCardBg
-            };
-
-            btnMonthThis = new Button
-            {
-                Text = "Tháng Này [Active]",
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                BackColor = ColorPrimaryCyan,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Location = new Point(20, 15),
-                Size = new Size(140, 35)
-            };
-            btnMonthThis.FlatAppearance.BorderSize = 0;
-            pnlFilterBar.Controls.Add(btnMonthThis);
-
-            btnQuery = new Button
-            {
-                Text = "Truy Vấn (F5)",
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                BackColor = ColorPrimaryCyan,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Location = new Point(900, 15),
-                Size = new Size(120, 35)
-            };
-            btnQuery.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#38bdf8");
-            btnQuery.Click += (s, e) => LoadRealDataFromDatabase();
-            pnlFilterBar.Controls.Add(btnQuery);
-
-            btnExportExcel = new Button
-            {
-                Text = "Xuất Excel",
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                BackColor = ColorSurface,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Location = new Point(1030, 15),
-                Size = new Size(120, 35)
-            };
-            btnExportExcel.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#334155");
-            pnlFilterBar.Controls.Add(btnExportExcel);
-
-            this.Controls.Add(pnlFilterBar);
-        }
-
-        private void BuildKpiCards()
-        {
-            pnlKpiContainer = new FlowLayoutPanel
-            {
-                Location = new Point(240, 135),
-                Size = new Size(1180, 100),
-                BackColor = ColorBg,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false
-            };
-
             string[] titles = {
                 "TỔNG DOANH THU KỲ NÀY",
                 "DOANH THU VÉ PHIM",
@@ -269,66 +198,13 @@ namespace CinemaManagement.Forms.Admin
                 kpiCards[i] = card;
                 pnlKpiContainer.Controls.Add(card);
             }
-
-            this.Controls.Add(pnlKpiContainer);
         }
 
-        private void BuildChartsContainer()
+        private void StyleDataGridView()
         {
-            pnlChartContainer = new Panel
-            {
-                Location = new Point(240, 245),
-                Size = new Size(1180, 210),
-                BackColor = ColorBg
-            };
-
-            pnlBarChart = new Panel
-            {
-                Location = new Point(0, 0),
-                Size = new Size(765, 210),
-                BackColor = ColorCardBg
-            };
-            lblBarTitle = new Label
-            {
-                Text = "XU HƯỚNG DOANH THU NGÀY TRONG THÁNG",
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = ColorTextMuted,
-                Location = new Point(15, 12)
-            };
-            pnlBarChart.Controls.Add(lblBarTitle);
-            pnlChartContainer.Controls.Add(pnlBarChart);
-
-            pnlDonutChart = new Panel
-            {
-                Location = new Point(780, 0),
-                Size = new Size(400, 210),
-                BackColor = ColorCardBg
-            };
-            lblDonutTitle = new Label
-            {
-                Text = "TỶ TRỌNG KÊNH BÁN TOUCHPOINT",
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = ColorTextMuted,
-                Location = new Point(15, 12)
-            };
-            pnlDonutChart.Controls.Add(lblDonutTitle);
-            pnlChartContainer.Controls.Add(pnlDonutChart);
-
-            this.Controls.Add(pnlChartContainer);
-        }
-
-        private void BuildDataGridViewCustom()
-        {
-            dgvReports.Location = new Point(240, 465);
-            dgvReports.Size = new Size(1180, 360);
             dgvReports.BackgroundColor = ColorSurface;
             dgvReports.ForeColor = Color.White;
             dgvReports.GridColor = ColorTranslator.FromHtml("#1f2937");
-            dgvReports.RowHeadersVisible = false;
-            dgvReports.AllowUserToAddRows = false;
-            dgvReports.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvReports.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-
             dgvReports.DefaultCellStyle.BackColor = ColorSurface;
             dgvReports.DefaultCellStyle.ForeColor = Color.White;
             dgvReports.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#1e242a");
@@ -339,21 +215,8 @@ namespace CinemaManagement.Forms.Admin
             dgvReports.EnableHeadersVisualStyles = false;
             dgvReports.RowTemplate.Height = 35;
 
-            dgvReports.Columns["ColSTT"].Width = 40;
-            dgvReports.Columns["ColName"].Width = 280;
-        }
-
-        private void BuildFooterStatus()
-        {
-            lblFooterStatus = new Label
-            {
-                Text = "Truy vấn LINQ: 18ms QUA SQLITE INDEX • MÃ BÁO CÁO: REP-20241026-FIN-091 • Ký số: MD5-VERIFIED",
-                Font = new Font("Segoe UI", 8F),
-                ForeColor = ColorTranslator.FromHtml("#64748b"),
-                Location = new Point(240, 835),
-                Size = new Size(1180, 25)
-            };
-            this.Controls.Add(lblFooterStatus);
+            ColSTT.Width = 40;
+            ColName.Width = 280;
         }
 
         private void LoadRealDataFromDatabase()

@@ -16,6 +16,7 @@
         private void InitializeComponent()
         {
             this.pnlSidebar = new System.Windows.Forms.Panel();
+            this.lnkOccupancy = new System.Windows.Forms.LinkLabel();
             this.lnkReports = new System.Windows.Forms.LinkLabel();
             this.lnkUsers = new System.Windows.Forms.LinkLabel();
             this.lnkCombo = new System.Windows.Forms.LinkLabel();
@@ -36,8 +37,8 @@
             ((System.ComponentModel.ISupportInitialize)(this.dgvOrderItems)).BeginInit();
             this.SuspendLayout();
 
-            this.pnlSidebar.BackColor =
-                System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
+            this.pnlSidebar.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
+            this.pnlSidebar.Controls.Add(this.lnkOccupancy);
             this.pnlSidebar.Controls.Add(this.lnkReports);
             this.pnlSidebar.Controls.Add(this.lnkUsers);
             this.pnlSidebar.Controls.Add(this.lnkCombo);
@@ -49,12 +50,21 @@
             this.pnlSidebar.Size = new System.Drawing.Size(220, 900);
             this.pnlSidebar.TabIndex = 0;
 
-            this.lnkReports.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))),
-                ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkOccupancy.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkOccupancy.AutoSize = true;
+            this.lnkOccupancy.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.lnkOccupancy.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkOccupancy.Location = new System.Drawing.Point(20, 300);
+            this.lnkOccupancy.Name = "lnkOccupancy";
+            this.lnkOccupancy.Size = new System.Drawing.Size(156, 19);
+            this.lnkOccupancy.TabIndex = 5;
+            this.lnkOccupancy.TabStop = true;
+            this.lnkOccupancy.Text = "Lấp đầy Khán Phòng";
+
+            this.lnkReports.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lnkReports.AutoSize = true;
             this.lnkReports.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.lnkReports.LinkColor =
-                System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkReports.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lnkReports.Location = new System.Drawing.Point(20, 245);
             this.lnkReports.Name = "lnkReports";
             this.lnkReports.Size = new System.Drawing.Size(155, 19);
@@ -62,12 +72,10 @@
             this.lnkReports.TabStop = true;
             this.lnkReports.Text = "Tài Chính & Doanh Thu";
 
-            this.lnkUsers.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))),
-                ((int)(((byte)(248)))));
+            this.lnkUsers.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lnkUsers.AutoSize = true;
             this.lnkUsers.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.lnkUsers.LinkColor =
-                System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkUsers.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lnkUsers.Location = new System.Drawing.Point(20, 190);
             this.lnkUsers.Name = "lnkUsers";
             this.lnkUsers.Size = new System.Drawing.Size(127, 19);
@@ -75,12 +83,10 @@
             this.lnkUsers.TabStop = true;
             this.lnkUsers.Text = "Quản Lý Nhân Viên";
 
-            this.lnkCombo.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))),
-                ((int)(((byte)(248)))));
+            this.lnkCombo.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lnkCombo.AutoSize = true;
             this.lnkCombo.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.lnkCombo.LinkColor =
-                System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkCombo.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lnkCombo.Location = new System.Drawing.Point(20, 135);
             this.lnkCombo.Name = "lnkCombo";
             this.lnkCombo.Size = new System.Drawing.Size(120, 19);
@@ -88,12 +94,10 @@
             this.lnkCombo.TabStop = true;
             this.lnkCombo.Text = "Quản Lý Combo FB";
 
-            this.lnkPos.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))),
-                ((int)(((byte)(248)))));
+            this.lnkPos.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lnkPos.AutoSize = true;
             this.lnkPos.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.lnkPos.LinkColor =
-                System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkPos.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lnkPos.Location = new System.Drawing.Point(20, 80);
             this.lnkPos.Name = "lnkPos";
             this.lnkPos.Size = new System.Drawing.Size(120, 19);
@@ -110,23 +114,18 @@
             this.lblLogo.TabIndex = 0;
             this.lblLogo.Text = "CINELUXE";
 
-            this.pnlComboCatalog.BackColor =
-                System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
+            this.pnlComboCatalog.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
             this.pnlComboCatalog.Location = new System.Drawing.Point(230, 500);
             this.pnlComboCatalog.Name = "pnlComboCatalog";
             this.pnlComboCatalog.Size = new System.Drawing.Size(515, 370);
             this.pnlComboCatalog.TabIndex = 1;
 
-            this.dgvOrderItems.BackgroundColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))),
-                ((int)(((byte)(20)))), ((int)(((byte)(24)))));
-            this.dgvOrderItems.ColumnHeadersHeightSizeMode =
-                System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dgvOrderItems.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[]
-            {
-                this.colItemName,
-                this.colQuantity,
-                this.colPrice
-            });
+            this.dgvOrderItems.BackgroundColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
+            this.dgvOrderItems.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.dgvOrderItems.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
+            this.colItemName,
+            this.colQuantity,
+            this.colPrice});
             this.dgvOrderItems.Location = new System.Drawing.Point(760, 10);
             this.dgvOrderItems.Name = "dgvOrderItems";
             this.dgvOrderItems.RowHeadersVisible = false;
@@ -163,8 +162,7 @@
             this.lblTotalAmount.TabIndex = 3;
             this.lblTotalAmount.Text = "0 đ";
 
-            this.txtCashGiven.BackColor =
-                System.Drawing.Color.FromArgb(((int)(((byte)(24)))), ((int)(((byte)(30)))), ((int)(((byte)(38)))));
+            this.txtCashGiven.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(24)))), ((int)(((byte)(30)))), ((int)(((byte)(38)))));
             this.txtCashGiven.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.txtCashGiven.Font = new System.Drawing.Font("Segoe UI", 12F);
             this.txtCashGiven.ForeColor = System.Drawing.Color.White;
@@ -176,16 +174,14 @@
 
             this.lblChangeDue.AutoSize = true;
             this.lblChangeDue.Font = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Bold);
-            this.lblChangeDue.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))),
-                ((int)(((byte)(248)))));
+            this.lblChangeDue.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lblChangeDue.Location = new System.Drawing.Point(760, 615);
             this.lblChangeDue.Name = "lblChangeDue";
             this.lblChangeDue.Size = new System.Drawing.Size(250, 17);
             this.lblChangeDue.TabIndex = 5;
             this.lblChangeDue.Text = "TIỀN THỐI LẠI (CHANGE DUE): 500.000 đ";
 
-            this.btnCheckout.BackColor =
-                System.Drawing.Color.FromArgb(((int)(((byte)(2)))), ((int)(((byte)(132)))), ((int)(((byte)(199)))));
+            this.btnCheckout.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(2)))), ((int)(((byte)(132)))), ((int)(((byte)(199)))));
             this.btnCheckout.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnCheckout.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Bold);
             this.btnCheckout.ForeColor = System.Drawing.Color.White;
@@ -196,9 +192,8 @@
             this.btnCheckout.Text = "IN VÉ HOÀN TẤT GIAO DỊCH [Enter]";
             this.btnCheckout.UseVisualStyleBackColor = false;
 
-            this.btnCancelOrder.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(225)))), ((int)(((byte)(29)))),
-                ((int)(((byte)(72)))));
-        this.btnCancelOrder.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnCancelOrder.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(225)))), ((int)(((byte)(29)))), ((int)(((byte)(72)))));
+            this.btnCancelOrder.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnCancelOrder.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.btnCancelOrder.ForeColor = System.Drawing.Color.White;
             this.btnCancelOrder.Location = new System.Drawing.Point(760, 715);
@@ -239,6 +234,7 @@
         private System.Windows.Forms.LinkLabel lnkCombo;
         private System.Windows.Forms.LinkLabel lnkUsers;
         private System.Windows.Forms.LinkLabel lnkReports;
+        private System.Windows.Forms.LinkLabel lnkOccupancy;
         private System.Windows.Forms.Panel pnlComboCatalog;
         private System.Windows.Forms.DataGridView dgvOrderItems;
         private System.Windows.Forms.DataGridViewTextBoxColumn colItemName;

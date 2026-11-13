@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.SQLite;
 using System.Drawing;
 using System.Windows.Forms;
+using CinemaManagement.Forms.Staff;
 
 namespace CinemaManagement.Forms.Staff
 {
@@ -10,6 +11,7 @@ namespace CinemaManagement.Forms.Staff
     {
         private string connectionString = "Data Source=cinema.db;Version=3;";
         private string placeholderText = "🔍 Tìm kiếm theo tên, email, username hoặc SĐT...";
+        private ErrorProvider errorProvider = new ErrorProvider();
 
         public FrmAdminUsers()
         {
@@ -57,6 +59,18 @@ namespace CinemaManagement.Forms.Staff
                     {
                         txtSearch.Text = placeholderText;
                         txtSearch.ForeColor = ColorTranslator.FromHtml("#64748b");
+                        errorProvider.SetError(txtSearch, string.Empty);
+                    }
+                    else
+                    {
+                        if (txtSearch.Text.Length < 2)
+                        {
+                            errorProvider.SetError(txtSearch, "Từ khóa tìm kiếm phải có ít nhất 2 ký tự!");
+                        }
+                        else
+                        {
+                            errorProvider.SetError(txtSearch, string.Empty);
+                        }
                     }
                 };
             }
@@ -88,10 +102,12 @@ namespace CinemaManagement.Forms.Staff
                 int third = rect.Width / 3;
                 if (relativeX < third)
                 {
+                    errorProvider.Clear();
                     MessageBox.Show($"Xem thông tin chi tiết tài khoản:\nMã ID: {userId}\nHọ tên: {username}", "Xem Chi Tiết", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else if (relativeX < third * 2)
                 {
+                    errorProvider.Clear();
                     MessageBox.Show($"Mở giao diện chỉnh sửa tài khoản:\nMã ID: {userId}\nHọ tên: {username}", "Chỉnh Sửa", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
@@ -193,17 +209,63 @@ namespace CinemaManagement.Forms.Staff
                 };
             }
 
+            if (lnkReports != null)
+            {
+                lnkReports.LinkClicked += (s, e) => {
+                    FrmAdminReports reportsForm = new FrmAdminReports();
+                    reportsForm.Show();
+                    this.Hide();
+                };
+            }
+
+            if (lnkOccupancy != null)
+            {
+                lnkOccupancy.LinkClicked += (s, e) => {
+                    FrmOccupancyReport occupancyForm = new FrmOccupancyReport();
+                    occupancyForm.Show();
+                    this.Hide();
+                };
+            }
+
             if (lnkUsers != null)
             {
                 lnkUsers.LinkClicked += (s, e) => {
-                    // Đang ở màn hình quản lý nhân viên
                 };
             }
 
             if (btnAddUser != null)
             {
                 btnAddUser.Click += (s, e) => {
-                    MessageBox.Show("Chức năng thêm người dùng mới đang được mở rộng.", "Thông Báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    string username = Microsoft.VisualBasic.Interaction.InputBox("Nhập tên tài khoản mới:", "Thêm Người Dùng", "staff_account");
+                    if (string.IsNullOrWhiteSpace(username))
+                    {
+                        errorProvider.SetError(btnAddUser, "Tên tài khoản không được để trống!");
+                        MessageBox.Show("Tên tài khoản không được để trống!", "Lỗi Dữ Liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                    errorProvider.SetError(btnAddUser, string.Empty);
+
+                    try
+                    {
+                        using (SQLiteConnection conn = new SQLiteConnection(connectionString))
+                        {
+                            conn.Open();
+                            string query = "INSERT INTO Users (Username, Email, Role, Status, CreatedAt) VALUES (@username, @email, 'Staff', 'Hoạt động', @date);";
+                            using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
+                            {
+                                cmd.Parameters.AddWithValue("@username", username);
+                                cmd.Parameters.AddWithValue("@email", username.ToLower() + "@cineluxe.vn");
+                                cmd.Parameters.AddWithValue("@date", DateTime.Now.ToString("dd/MM/yyyy"));
+                                cmd.ExecuteNonQuery();
+                            }
+                        }
+                        LoadUsersFromDatabase();
+                        MessageBox.Show("Thêm người dùng mới thành công vào cơ sở dữ liệu!", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Lỗi khi thêm người dùng: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
                 };
             }
         }
