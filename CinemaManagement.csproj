@@ -18,7 +18,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Forms\Staff\" />
       <Folder Include="Helpers\" />
     </ItemGroup>
 
@@ -51,6 +50,9 @@
         <SubType>Form</SubType>
       </Compile>
       <Compile Update="Forms\Admin\FrmAdminShowtimes.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Update="Forms\Staff\FrmAdminReports.cs">
         <SubType>Form</SubType>
       </Compile>
     </ItemGroup>
