@@ -37,6 +37,7 @@ namespace CinemaManagement.Forms.Staff
         private FlowLayoutPanel pnlDynamicMovies;
         private FlowLayoutPanel pnlDynamicShowtimes;
         private SeatMapControl seatMapControl;
+        private ErrorProvider errorProvider = new ErrorProvider();
 
         private class MovieDetail
         {
@@ -240,7 +241,7 @@ namespace CinemaManagement.Forms.Staff
                 if (matchShow != null)
                 {
                     selectedShowtimeId = matchShow.ShowtimeId;
-                    selectedShowtime = $"{matchShow.StartTime} • P.{matchShow.RoomId:D2} [{matchShow.RoomName}]";
+                    selectedShowtime = $"{matchShow.StartTime} P.{matchShow.RoomId:D2} [{matchShow.RoomName}]";
                     selectedTicketPrice = matchShow.Price;
                     if (seatMapControl != null)
                     {
@@ -433,7 +434,7 @@ namespace CinemaManagement.Forms.Staff
             foreach (var show in movieShows)
             {
                 Button btnShow = new Button();
-                string showStr = $"{show.StartTime} • P.{show.RoomId:D2} [{show.RoomName}]";
+                string showStr = $"{show.StartTime} P.{show.RoomId:D2} [{show.RoomName}]";
                 btnShow.Text = showStr;
                 btnShow.Font = new Font("Segoe UI", 7.5F, FontStyle.Bold);
                 btnShow.Size = new Size(165, 32);
@@ -450,7 +451,7 @@ namespace CinemaManagement.Forms.Staff
                 btnShow.Click += (s, e) =>
                 {
                     selectedShowtimeId = targetShow.ShowtimeId;
-                    selectedShowtime = $"{targetShow.StartTime} • P.{targetShow.RoomId:D2} [{targetShow.RoomName}]";
+                    selectedShowtime = $"{targetShow.StartTime} P.{targetShow.RoomId:D2} [{targetShow.RoomName}]";
                     selectedTicketPrice = targetShow.Price;
                     if (seatMapControl != null)
                     {
@@ -587,20 +588,40 @@ namespace CinemaManagement.Forms.Staff
 
             lnkReports.LinkClicked += (s, e) =>
             {
-                var reportsForm = new CinemaManagement.Forms.Admin.FrmAdminReports();
+                var reportsForm = new CinemaManagement.Forms.Staff.FrmAdminReports();
                 reportsForm.Show();
                 this.Hide();
             };
 
+            if (lnkOccupancy != null)
+            {
+                lnkOccupancy.LinkClicked += (s, e) => {
+                    var occupancyForm = new FrmOccupancyReport();
+                    occupancyForm.Show();
+                    this.Hide();
+                };
+            }
+
             btnCheckout.Click += (s, e) =>
             {
-                decimal cashGiven = ParseMoney(txtCashGiven.Text);
-                if (cashGiven < currentTotal)
+                if (selectedSeats.Count == 0)
                 {
+                    errorProvider.SetError(btnCheckout, "Vui lòng chọn ít nhất một ghế ngồi trước khi thanh toán!");
+                    MessageBox.Show("Chưa chọn ghế ngồi cho đơn hàng.", "Lỗi Thanh Toán", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                decimal cashGiven = ParseMoney(txtCashGiven.Text);
+                if (string.IsNullOrWhiteSpace(txtCashGiven.Text) || cashGiven < currentTotal)
+                {
+                    errorProvider.SetError(txtCashGiven, "Tiền khách đưa chưa đủ hoặc không hợp lệ!");
                     MessageBox.Show("Tiền khách đưa chưa đủ để thanh toán!", "Lỗi Thanh Toán", MessageBoxButtons.OK,
                         MessageBoxIcon.Error);
                     return;
                 }
+
+                errorProvider.SetError(btnCheckout, string.Empty);
+                errorProvider.SetError(txtCashGiven, string.Empty);
 
                 SaveTransactionToDatabase(currentTotal, cashGiven);
                 MessageBox.Show("Đã thanh toán và lưu giao dịch thành công vào cơ sở dữ liệu!", "Hoàn Tất",
@@ -617,6 +638,7 @@ namespace CinemaManagement.Forms.Staff
 
             btnCancelOrder.Click += (s, e) =>
             {
+                errorProvider.Clear();
                 selectedSeats.Clear();
                 selectedCombos.Clear();
                 UpdateOrderItems();
