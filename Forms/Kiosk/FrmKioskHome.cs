@@ -13,126 +13,22 @@ namespace CinemaManagement.Forms.Kiosk
 {
     public partial class FrmKioskHome : Form
     {
-        private FlowLayoutPanel pnlMovieList;
-        private Label lblHeader;
-        private Panel pnlHeader;
-        private Panel pnlFilterBar;
-        private Label lblClock;
-        private System.Windows.Forms.Timer _timer;
+       private System.Windows.Forms.Timer _timer;
 
         public FrmKioskHome()
         {
-            InitializeComponent(); // 1. Khởi tạo tất cả giao diện trước
-            LoadMovies();          // 2. Nạp dữ liệu phim lên pnlMovieList
+            InitializeComponent();
+            InitializeFilterButtons();
+            RegisterEvents();
+            LoadMovies();
         }
 
-        private void InitializeComponent()
+        private void InitializeFilterButtons()
         {
-            this.SuspendLayout();
-            this.Text = "CineLuxe Kiosk - Trang chủ";
-            this.Size = new Size(1920, 1080);
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.FormBorderStyle = FormBorderStyle.None;
-            this.BackColor = ColorTranslator.FromHtml("#101418");
-
-            // --- PANEL HEADER ---
-            pnlHeader = new Panel
-            {
-                Size = new Size(1920, 80),
-                Location = new Point(0, 0),
-                BackColor = ColorTranslator.FromHtml("#181c20")
-            };
-
-            lblHeader = new Label
-            {
-                Text = "CINELUXE KIOSK",
-                Font = new Font("Segoe UI", 16F, FontStyle.Bold),
-                ForeColor = ColorTranslator.FromHtml("#e0e3e8"),
-                Location = new Point(24, 24),
-                AutoSize = true
-            };
-
-            Label lblStep1 = new Label
-            {
-                Text = "1. Chọn Phim",
-                Font = new Font("Segoe UI", 11F, FontStyle.Bold),
-                ForeColor = Color.White,
-                BackColor = ColorTranslator.FromHtml("#1a5276"),
-                Padding = new Padding(16, 8, 16, 8),
-                Location = new Point(600, 20),
-                AutoSize = true
-            };
-
-            Label lblStep2 = new Label
-            {
-                Text = "2. Chọn Ghế",
-                Font = new Font("Segoe UI", 11F, FontStyle.Regular),
-                ForeColor = ColorTranslator.FromHtml("#8b9198"),
-                Location = new Point(780, 28),
-                AutoSize = true
-            };
-
-            lblClock = new Label
-            {
-                Text = DateTime.Now.ToString("HH:mm:ss"),
-                Font = new Font("Segoe UI", 12F, FontStyle.Bold),
-                ForeColor = ColorTranslator.FromHtml("#ffb961"), 
-                Location = new Point(1540, 26),
-                AutoSize = true
-            };
-
-            Button btnHelp = new Button
-            {
-                Text = "Trợ giúp",
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                ForeColor = ColorTranslator.FromHtml("#ffb961"),
-                BackColor = ColorTranslator.FromHtml("#6f4400"),
-                FlatStyle = FlatStyle.Flat,
-                Size = new Size(100, 36),
-                Location = new Point(1670, 22),
-                Cursor = Cursors.Hand
-            };
-            btnHelp.FlatAppearance.BorderSize = 0;
-
-            Button btnExit = new Button
-            {
-                Text = "✕ THOÁT",
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                ForeColor = Color.White,
-                BackColor = ColorTranslator.FromHtml("#ef4444"),
-                FlatStyle = FlatStyle.Flat,
-                Size = new Size(100, 36),
-                Location = new Point(1795, 22),
-                Cursor = Cursors.Hand
-            };
-            btnExit.FlatAppearance.BorderSize = 0;
-            btnExit.Click += (s, e) =>
-            {
-                Form mainForm = Application.OpenForms.Cast<Form>().FirstOrDefault(f => f.Name == "FrmMain" || f.Name == "FrmRoleSelection" || f.Tag?.ToString() == "Main");
-                if (mainForm != null)
-                {
-                    mainForm.Show();
-                }
-                this.Close();
-            };
-
-            pnlHeader.Controls.Add(lblHeader);
-            pnlHeader.Controls.Add(lblStep1);
-            pnlHeader.Controls.Add(lblStep2);
-            pnlHeader.Controls.Add(lblClock);
-            pnlHeader.Controls.Add(btnHelp);
-            pnlHeader.Controls.Add(btnExit);
-            
-            // --- PANEL FILTER BAR ---
-            pnlFilterBar = new Panel
-            {
-                Size = new Size(1920, 56),
-                Location = new Point(0, 80),
-                BackColor = ColorTranslator.FromHtml("#101418")
-            };
-
+            pnlFilterBar.Controls.Clear();
             string[] filters = { "Tất cả phim", "Suất hôm nay", "Phim IMAX", "Rạp thường" };
             int leftPos = 24;
+
             foreach (var f in filters)
             {
                 Button btnFilter = new Button
@@ -147,8 +43,20 @@ namespace CinemaManagement.Forms.Kiosk
                     Cursor = Cursors.Hand
                 };
                 btnFilter.FlatAppearance.BorderSize = 0;
+
                 btnFilter.Click += (s, e) =>
                 {
+                    foreach (Control ctrl in pnlFilterBar.Controls)
+                    {
+                        if (ctrl is Button b)
+                        {
+                            b.BackColor = ColorTranslator.FromHtml("#262a2f");
+                            b.ForeColor = ColorTranslator.FromHtml("#c1c7cf");
+                        }
+                    }
+                    btnFilter.BackColor = ColorTranslator.FromHtml("#1a5276");
+                    btnFilter.ForeColor = Color.White;
+
                     string filterType = "All";
                     if (f == "Suất hôm nay") filterType = "Today";
                     else if (f == "Phim IMAX") filterType = "IMAX";
@@ -156,28 +64,26 @@ namespace CinemaManagement.Forms.Kiosk
 
                     FilterMovies(filterType);
                 };
+
                 pnlFilterBar.Controls.Add(btnFilter);
                 leftPos += 140;
             }
+        }
 
-            // --- PANEL MOVIE LIST (Đã đưa về đúng chỗ) ---
-            pnlMovieList = new FlowLayoutPanel
+        private void RegisterEvents()
+        {
+            btnExit.Click += (s, e) =>
             {
-                Size = new Size(1872, 870), 
-                Location = new Point(24, 150),
-                AutoScroll = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = true,
-                Padding = new Padding(0),
-                BackColor = ColorTranslator.FromHtml("#101418")
+                _timer?.Stop();
+                Form? mainForm = Application.OpenForms.Cast<Form>()
+                    .FirstOrDefault(f => f.Name == "FrmMain" || f.Name == "FrmRoleSelection" || f.Tag?.ToString() == "Main");
+                if (mainForm != null)
+                {
+                    mainForm.Show();
+                }
+                this.Close();
             };
 
-            this.Controls.Add(pnlHeader);
-            this.Controls.Add(pnlFilterBar);
-            this.Controls.Add(pnlMovieList);
-            this.ResumeLayout(false);
-
-            // TIMER ĐỒNG HỒ
             _timer = new System.Windows.Forms.Timer { Interval = 1000 };
             _timer.Tick += (s, e) =>
             {
@@ -189,10 +95,10 @@ namespace CinemaManagement.Forms.Kiosk
 
         private void FilterMovies(string filterType)
         {
-            using var db = new CinemaManagement.Data.CinemaDbContext();
+            using var db = new CinemaDbContext();
             var today = DateTime.Today;
 
-            IQueryable<CinemaManagement.Models.Movie> query = db.Movies;
+            IQueryable<Movie> query = db.Movies;
 
             switch (filterType)
             {
@@ -225,7 +131,7 @@ namespace CinemaManagement.Forms.Kiosk
             }
 
             var movieList = query.ToList();
-            LoadMovies(movieList); // Nạp danh sách đã lọc lên giao diện
+            LoadMovies(movieList);
         }
 
         private void LoadMovies(List<Movie>? movies = null)
@@ -235,7 +141,6 @@ namespace CinemaManagement.Forms.Kiosk
 
             pnlMovieList.Controls.Clear();
 
-            // Nếu không truyền tham số danh sách phim thì mặc định lấy tất cả từ DB
             if (movies == null)
             {
                 using var db = new CinemaDbContext();
@@ -286,13 +191,13 @@ namespace CinemaManagement.Forms.Kiosk
 
                     if (!string.IsNullOrEmpty(finalPath))
                     {
-                        try 
-                        { 
+                        try
+                        {
                             using (var stream = new FileStream(finalPath, FileMode.Open, FileAccess.Read))
                             {
                                 picPoster.Image = Image.FromStream(stream);
                             }
-                        } 
+                        }
                         catch { }
                     }
                 }
@@ -306,7 +211,7 @@ namespace CinemaManagement.Forms.Kiosk
                     AutoSize = true,
                     MaximumSize = new Size(270, 0)
                 };
-                
+
                 Label lblGenre = new Label
                 {
                     Text = $"{movie.Genre}\n{movie.Duration} phút",
@@ -342,7 +247,7 @@ namespace CinemaManagement.Forms.Kiosk
 
                 int selectedMovieId = movie.MovieId;
                 btnBook.Click += (s, e) => OpenShowtime(selectedMovieId);
-                
+
                 card.Controls.Add(picPoster);
                 card.Controls.Add(lblTitle);
                 card.Controls.Add(lblGenre);
@@ -355,8 +260,17 @@ namespace CinemaManagement.Forms.Kiosk
 
         private void OpenShowtime(int movieId)
         {
+            foreach (Form f in Application.OpenForms)
+            {
+                if (f != this && f.Visible)
+                {
+                    f.Hide();
+                }
+            }
             FrmKioskShowtime frmShowtime = new FrmKioskShowtime(movieId);
+            frmShowtime.TopMost = true;
             frmShowtime.Show();
+            frmShowtime.Activate();
             this.Hide();
         }
     }
