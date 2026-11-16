@@ -330,5 +330,8 @@ namespace CinemaManagement.Forms.Kiosk
                 pnlShowtimes.Controls.Add(btnTime);
             }
         }
+
+        pnlShowtimes.Controls.Add(btnTime);
     }
+}
 }
