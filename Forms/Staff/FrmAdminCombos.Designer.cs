@@ -16,6 +16,8 @@
         private void InitializeComponent()
         {
             this.pnlSidebar = new System.Windows.Forms.Panel();
+            this.lnkOccupancy = new System.Windows.Forms.LinkLabel();
+            this.lnkReports = new System.Windows.Forms.LinkLabel();
             this.lnkUsers = new System.Windows.Forms.LinkLabel();
             this.lnkCombo = new System.Windows.Forms.LinkLabel();
             this.lnkPos = new System.Windows.Forms.LinkLabel();
@@ -39,6 +41,8 @@
             this.SuspendLayout();
 
             this.pnlSidebar.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
+            this.pnlSidebar.Controls.Add(this.lnkOccupancy);
+            this.pnlSidebar.Controls.Add(this.lnkReports);
             this.pnlSidebar.Controls.Add(this.lnkUsers);
             this.pnlSidebar.Controls.Add(this.lnkCombo);
             this.pnlSidebar.Controls.Add(this.lnkPos);
@@ -49,35 +53,57 @@
             this.pnlSidebar.Size = new System.Drawing.Size(220, 720);
             this.pnlSidebar.TabIndex = 0;
 
-            this.lnkUsers.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkOccupancy.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(125)))), ((int)(((byte)(211)))), ((int)(((byte)(252)))));
+            this.lnkOccupancy.AutoSize = true;
+            this.lnkOccupancy.Font = new System.Drawing.Font("Segoe UI", 10.5F, System.Drawing.FontStyle.Bold);
+            this.lnkOccupancy.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkOccupancy.Location = new System.Drawing.Point(20, 280);
+            this.lnkOccupancy.Name = "lnkOccupancy";
+            this.lnkOccupancy.Size = new System.Drawing.Size(156, 19);
+            this.lnkOccupancy.TabIndex = 5;
+            this.lnkOccupancy.TabStop = true;
+            this.lnkOccupancy.Text = "Lấp đầy Khán Phòng";
+
+            this.lnkReports.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(125)))), ((int)(((byte)(211)))), ((int)(((byte)(252)))));
+            this.lnkReports.AutoSize = true;
+            this.lnkReports.Font = new System.Drawing.Font("Segoe UI", 10.5F, System.Drawing.FontStyle.Bold);
+            this.lnkReports.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkReports.Location = new System.Drawing.Point(20, 230);
+            this.lnkReports.Name = "lnkReports";
+            this.lnkReports.Size = new System.Drawing.Size(162, 19);
+            this.lnkReports.TabIndex = 4;
+            this.lnkReports.TabStop = true;
+            this.lnkReports.Text = "Tài Chính & Doanh Thu";
+
+            this.lnkUsers.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(125)))), ((int)(((byte)(211)))), ((int)(((byte)(252)))));
             this.lnkUsers.AutoSize = true;
-            this.lnkUsers.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.lnkUsers.Font = new System.Drawing.Font("Segoe UI", 10.5F, System.Drawing.FontStyle.Bold);
             this.lnkUsers.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
-            this.lnkUsers.Location = new System.Drawing.Point(20, 190);
+            this.lnkUsers.Location = new System.Drawing.Point(20, 180);
             this.lnkUsers.Name = "lnkUsers";
-            this.lnkUsers.Size = new System.Drawing.Size(127, 19);
+            this.lnkUsers.Size = new System.Drawing.Size(155, 19);
             this.lnkUsers.TabIndex = 3;
             this.lnkUsers.TabStop = true;
             this.lnkUsers.Text = "Quản Lý Nhân Viên";
 
-            this.lnkCombo.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkCombo.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(125)))), ((int)(((byte)(211)))), ((int)(((byte)(252)))));
             this.lnkCombo.AutoSize = true;
-            this.lnkCombo.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.lnkCombo.Font = new System.Drawing.Font("Segoe UI", 10.5F, System.Drawing.FontStyle.Bold);
             this.lnkCombo.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
-            this.lnkCombo.Location = new System.Drawing.Point(20, 135);
+            this.lnkCombo.Location = new System.Drawing.Point(20, 130);
             this.lnkCombo.Name = "lnkCombo";
-            this.lnkCombo.Size = new System.Drawing.Size(120, 19);
+            this.lnkCombo.Size = new System.Drawing.Size(151, 19);
             this.lnkCombo.TabIndex = 2;
             this.lnkCombo.TabStop = true;
             this.lnkCombo.Text = "Quản Lý Combo FB";
 
-            this.lnkPos.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkPos.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(125)))), ((int)(((byte)(211)))), ((int)(((byte)(252)))));
             this.lnkPos.AutoSize = true;
-            this.lnkPos.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.lnkPos.Font = new System.Drawing.Font("Segoe UI", 10.5F, System.Drawing.FontStyle.Bold);
             this.lnkPos.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lnkPos.Location = new System.Drawing.Point(20, 80);
             this.lnkPos.Name = "lnkPos";
-            this.lnkPos.Size = new System.Drawing.Size(120, 19);
+            this.lnkPos.Size = new System.Drawing.Size(130, 19);
             this.lnkPos.TabIndex = 1;
             this.lnkPos.TabStop = true;
             this.lnkPos.Text = "Bán Vé Quầy POS";
@@ -220,24 +246,26 @@
             this.PerformLayout();
         }
 
-        private System.Windows.Forms.Panel pnlSidebar;
-        private System.Windows.Forms.Label lblLogo;
-        private System.Windows.Forms.LinkLabel lnkPos;
-        private System.Windows.Forms.LinkLabel lnkCombo;
-        private System.Windows.Forms.LinkLabel lnkUsers;
-        private System.Windows.Forms.Button btnAddComboTop;
-        private System.Windows.Forms.Button btnUpdatePrice;
-        private System.Windows.Forms.Button btnImportStore;
-        private System.Windows.Forms.Button btnExportExcel;
-        private System.Windows.Forms.TextBox txtSearch;
-        private System.Windows.Forms.DataGridView dgvCombos;
-        private System.Windows.Forms.DataGridViewTextBoxColumn colSku;
-        private System.Windows.Forms.DataGridViewTextBoxColumn colImage;
-        private System.Windows.Forms.DataGridViewTextBoxColumn colNameDesc;
-        private System.Windows.Forms.DataGridViewTextBoxColumn colCategory;
-        private System.Windows.Forms.DataGridViewTextBoxColumn colCostPrice;
-        private System.Windows.Forms.DataGridViewTextBoxColumn colListPrice;
-        private System.Windows.Forms.DataGridViewTextBoxColumn colStock;
-        private System.Windows.Forms.Label lblFooterStatus;
+        public System.Windows.Forms.Panel pnlSidebar;
+        public System.Windows.Forms.Label lblLogo;
+        public System.Windows.Forms.LinkLabel lnkPos;
+        public System.Windows.Forms.LinkLabel lnkCombo;
+        public System.Windows.Forms.LinkLabel lnkUsers;
+        public System.Windows.Forms.LinkLabel lnkReports;
+        public System.Windows.Forms.LinkLabel lnkOccupancy;
+        public System.Windows.Forms.Button btnAddComboTop;
+        public System.Windows.Forms.Button btnUpdatePrice;
+        public System.Windows.Forms.Button btnImportStore;
+        public System.Windows.Forms.Button btnExportExcel;
+        public System.Windows.Forms.TextBox txtSearch;
+        public System.Windows.Forms.DataGridView dgvCombos;
+        public System.Windows.Forms.DataGridViewTextBoxColumn colSku;
+        public System.Windows.Forms.DataGridViewTextBoxColumn colImage;
+        public System.Windows.Forms.DataGridViewTextBoxColumn colNameDesc;
+        public System.Windows.Forms.DataGridViewTextBoxColumn colCategory;
+        public System.Windows.Forms.DataGridViewTextBoxColumn colCostPrice;
+        public System.Windows.Forms.DataGridViewTextBoxColumn colListPrice;
+        public System.Windows.Forms.DataGridViewTextBoxColumn colStock;
+        public System.Windows.Forms.Label lblFooterStatus;
     }
 }

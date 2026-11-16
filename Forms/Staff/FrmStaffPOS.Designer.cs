@@ -16,16 +16,18 @@
         private void InitializeComponent()
         {
             this.pnlSidebar = new System.Windows.Forms.Panel();
+            this.lnkOccupancy = new System.Windows.Forms.LinkLabel();
+            this.lnkReports = new System.Windows.Forms.LinkLabel();
             this.lnkUsers = new System.Windows.Forms.LinkLabel();
             this.lnkCombo = new System.Windows.Forms.LinkLabel();
             this.lnkPos = new System.Windows.Forms.LinkLabel();
             this.lblLogo = new System.Windows.Forms.Label();
-            this.pnlSeatMatrix = new System.Windows.Forms.Panel();
             this.pnlComboCatalog = new System.Windows.Forms.Panel();
             this.dgvOrderItems = new System.Windows.Forms.DataGridView();
             this.colItemName = new System.Windows.Forms.DataGridViewTextBoxColumn();
-            this.colQty = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.colQuantity = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.colPrice = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.lblTotalLabel = new System.Windows.Forms.Label();
             this.lblTotalAmount = new System.Windows.Forms.Label();
             this.txtCashGiven = new System.Windows.Forms.TextBox();
             this.lblChangeDue = new System.Windows.Forms.Label();
@@ -36,6 +38,8 @@
             this.SuspendLayout();
 
             this.pnlSidebar.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
+            this.pnlSidebar.Controls.Add(this.lnkOccupancy);
+            this.pnlSidebar.Controls.Add(this.lnkReports);
             this.pnlSidebar.Controls.Add(this.lnkUsers);
             this.pnlSidebar.Controls.Add(this.lnkCombo);
             this.pnlSidebar.Controls.Add(this.lnkPos);
@@ -43,8 +47,30 @@
             this.pnlSidebar.Dock = System.Windows.Forms.DockStyle.Left;
             this.pnlSidebar.Location = new System.Drawing.Point(0, 0);
             this.pnlSidebar.Name = "pnlSidebar";
-            this.pnlSidebar.Size = new System.Drawing.Size(220, 740);
+            this.pnlSidebar.Size = new System.Drawing.Size(220, 900);
             this.pnlSidebar.TabIndex = 0;
+
+            this.lnkOccupancy.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkOccupancy.AutoSize = true;
+            this.lnkOccupancy.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.lnkOccupancy.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkOccupancy.Location = new System.Drawing.Point(20, 300);
+            this.lnkOccupancy.Name = "lnkOccupancy";
+            this.lnkOccupancy.Size = new System.Drawing.Size(156, 19);
+            this.lnkOccupancy.TabIndex = 5;
+            this.lnkOccupancy.TabStop = true;
+            this.lnkOccupancy.Text = "Lấp đầy Khán Phòng";
+
+            this.lnkReports.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkReports.AutoSize = true;
+            this.lnkReports.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.lnkReports.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.lnkReports.Location = new System.Drawing.Point(20, 245);
+            this.lnkReports.Name = "lnkReports";
+            this.lnkReports.Size = new System.Drawing.Size(155, 19);
+            this.lnkReports.TabIndex = 4;
+            this.lnkReports.TabStop = true;
+            this.lnkReports.Text = "Tài Chính & Doanh Thu";
 
             this.lnkUsers.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
             this.lnkUsers.AutoSize = true;
@@ -88,74 +114,81 @@
             this.lblLogo.TabIndex = 0;
             this.lblLogo.Text = "CINELUXE";
 
-            this.pnlSeatMatrix.Location = new System.Drawing.Point(235, 130);
-            this.pnlSeatMatrix.Name = "pnlSeatMatrix";
-            this.pnlSeatMatrix.Size = new System.Drawing.Size(510, 290);
-            this.pnlSeatMatrix.TabIndex = 1;
-
-            this.pnlComboCatalog.Location = new System.Drawing.Point(235, 435);
+            this.pnlComboCatalog.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
+            this.pnlComboCatalog.Location = new System.Drawing.Point(230, 500);
             this.pnlComboCatalog.Name = "pnlComboCatalog";
-            this.pnlComboCatalog.Size = new System.Drawing.Size(510, 280);
-            this.pnlComboCatalog.TabIndex = 2;
+            this.pnlComboCatalog.Size = new System.Drawing.Size(515, 370);
+            this.pnlComboCatalog.TabIndex = 1;
 
+            this.dgvOrderItems.BackgroundColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
             this.dgvOrderItems.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dgvOrderItems.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
             this.colItemName,
-            this.colQty,
+            this.colQuantity,
             this.colPrice});
-            this.dgvOrderItems.Location = new System.Drawing.Point(760, 20);
+            this.dgvOrderItems.Location = new System.Drawing.Point(760, 10);
             this.dgvOrderItems.Name = "dgvOrderItems";
             this.dgvOrderItems.RowHeadersVisible = false;
-            this.dgvOrderItems.Size = new System.Drawing.Size(500, 380);
-            this.dgvOrderItems.TabIndex = 3;
+            this.dgvOrderItems.Size = new System.Drawing.Size(500, 480);
+            this.dgvOrderItems.TabIndex = 2;
 
             this.colItemName.HeaderText = "DIỄN GIẢI DỊCH VỤ / MẶT HÀNG";
             this.colItemName.Name = "colItemName";
             this.colItemName.Width = 320;
 
-            this.colQty.HeaderText = "SL";
-            this.colQty.Name = "colQty";
-            this.colQty.Width = 50;
+            this.colQuantity.HeaderText = "SL";
+            this.colQuantity.Name = "colQuantity";
+            this.colQuantity.Width = 60;
 
             this.colPrice.HeaderText = "THÀNH TIỀN";
             this.colPrice.Name = "colPrice";
-            this.colPrice.Width = 125;
+            this.colPrice.Width = 118;
 
-            this.lblTotalAmount.Font = new System.Drawing.Font("Segoe UI", 24F, System.Drawing.FontStyle.Bold);
+            this.lblTotalLabel.AutoSize = true;
+            this.lblTotalLabel.Font = new System.Drawing.Font("Segoe UI", 20F, System.Drawing.FontStyle.Bold);
+            this.lblTotalLabel.ForeColor = System.Drawing.Color.White;
+            this.lblTotalLabel.Location = new System.Drawing.Point(760, 510);
+            this.lblTotalLabel.Name = "lblTotalLabel";
+            this.lblTotalLabel.Size = new System.Drawing.Size(71, 37);
+            this.lblTotalLabel.TabIndex = 3;
+            this.lblTotalLabel.Text = "0 đ";
+
+            this.lblTotalAmount.AutoSize = true;
+            this.lblTotalAmount.Font = new System.Drawing.Font("Segoe UI", 20F, System.Drawing.FontStyle.Bold);
             this.lblTotalAmount.ForeColor = System.Drawing.Color.White;
-            this.lblTotalAmount.Location = new System.Drawing.Point(760, 420);
+            this.lblTotalAmount.Location = new System.Drawing.Point(760, 510);
             this.lblTotalAmount.Name = "lblTotalAmount";
-            this.lblTotalAmount.Size = new System.Drawing.Size(500, 50);
-            this.lblTotalAmount.TabIndex = 4;
+            this.lblTotalAmount.Size = new System.Drawing.Size(71, 37);
+            this.lblTotalAmount.TabIndex = 3;
             this.lblTotalAmount.Text = "0 đ";
 
-            this.txtCashGiven.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
+            this.txtCashGiven.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(24)))), ((int)(((byte)(30)))), ((int)(((byte)(38)))));
             this.txtCashGiven.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.txtCashGiven.Font = new System.Drawing.Font("Segoe UI", 12F);
             this.txtCashGiven.ForeColor = System.Drawing.Color.White;
-            this.txtCashGiven.Location = new System.Drawing.Point(760, 485);
+            this.txtCashGiven.Location = new System.Drawing.Point(760, 570);
             this.txtCashGiven.Name = "txtCashGiven";
             this.txtCashGiven.Size = new System.Drawing.Size(500, 29);
-            this.txtCashGiven.TabIndex = 5;
+            this.txtCashGiven.TabIndex = 4;
             this.txtCashGiven.Text = "500000";
 
             this.lblChangeDue.AutoSize = true;
             this.lblChangeDue.Font = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Bold);
             this.lblChangeDue.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
-            this.lblChangeDue.Location = new System.Drawing.Point(760, 530);
+            this.lblChangeDue.Location = new System.Drawing.Point(760, 615);
             this.lblChangeDue.Name = "lblChangeDue";
-            this.lblChangeDue.Size = new System.Drawing.Size(220, 17);
-            this.lblChangeDue.TabIndex = 6;
-            this.lblChangeDue.Text = "TIỀN THỐI LẠI (CHANGE DUE): 0 đ";
+            this.lblChangeDue.Size = new System.Drawing.Size(250, 17);
+            this.lblChangeDue.TabIndex = 5;
+            this.lblChangeDue.Text = "TIỀN THỐI LẠI (CHANGE DUE): 500.000 đ";
 
             this.btnCheckout.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(2)))), ((int)(((byte)(132)))), ((int)(((byte)(199)))));
             this.btnCheckout.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnCheckout.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Bold);
             this.btnCheckout.ForeColor = System.Drawing.Color.White;
-            this.btnCheckout.Location = new System.Drawing.Point(760, 570);
+            this.btnCheckout.Location = new System.Drawing.Point(760, 650);
             this.btnCheckout.Name = "btnCheckout";
-            this.btnCheckout.Size = new System.Drawing.Size(500, 55);
-            this.btnCheckout.TabIndex = 7;
+            this.btnCheckout.Size = new System.Drawing.Size(500, 50);
+            this.btnCheckout.TabIndex = 6;
             this.btnCheckout.Text = "IN VÉ HOÀN TẤT GIAO DỊCH [Enter]";
             this.btnCheckout.UseVisualStyleBackColor = false;
 
@@ -163,31 +196,31 @@
             this.btnCancelOrder.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnCancelOrder.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.btnCancelOrder.ForeColor = System.Drawing.Color.White;
-            this.btnCancelOrder.Location = new System.Drawing.Point(760, 640);
+            this.btnCancelOrder.Location = new System.Drawing.Point(760, 715);
             this.btnCancelOrder.Name = "btnCancelOrder";
-            this.btnCancelOrder.Size = new System.Drawing.Size(500, 45);
-            this.btnCancelOrder.TabIndex = 8;
+            this.btnCancelOrder.Size = new System.Drawing.Size(500, 40);
+            this.btnCancelOrder.TabIndex = 7;
             this.btnCancelOrder.Text = "Hủy giao dịch [Esc]";
             this.btnCancelOrder.UseVisualStyleBackColor = false;
 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(11)))), ((int)(((byte)(15)))), ((int)(((byte)(18)))));
-            this.ClientSize = new System.Drawing.Size(1280, 740);
+            this.ClientSize = new System.Drawing.Size(1280, 900);
             this.Controls.Add(this.btnCancelOrder);
             this.Controls.Add(this.btnCheckout);
             this.Controls.Add(this.lblChangeDue);
             this.Controls.Add(this.txtCashGiven);
             this.Controls.Add(this.lblTotalAmount);
+            this.Controls.Add(this.lblTotalLabel);
             this.Controls.Add(this.dgvOrderItems);
             this.Controls.Add(this.pnlComboCatalog);
-            this.Controls.Add(this.pnlSeatMatrix);
             this.Controls.Add(this.pnlSidebar);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
             this.Name = "FrmStaffPOS";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "CINELUXE MANAGEMENT STUDIO - [.NET 8.0 / WPF-NATIVE ENGINE]";
+            this.Text = "CINELUXE MANAGEMENT STUDIO - BÁN VÉ QUẦY POS";
             this.pnlSidebar.ResumeLayout(false);
             this.pnlSidebar.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dgvOrderItems)).EndInit();
@@ -200,12 +233,14 @@
         private System.Windows.Forms.LinkLabel lnkPos;
         private System.Windows.Forms.LinkLabel lnkCombo;
         private System.Windows.Forms.LinkLabel lnkUsers;
-        private System.Windows.Forms.Panel pnlSeatMatrix;
+        private System.Windows.Forms.LinkLabel lnkReports;
+        private System.Windows.Forms.LinkLabel lnkOccupancy;
         private System.Windows.Forms.Panel pnlComboCatalog;
         private System.Windows.Forms.DataGridView dgvOrderItems;
         private System.Windows.Forms.DataGridViewTextBoxColumn colItemName;
-        private System.Windows.Forms.DataGridViewTextBoxColumn colQty;
+        private System.Windows.Forms.DataGridViewTextBoxColumn colQuantity;
         private System.Windows.Forms.DataGridViewTextBoxColumn colPrice;
+        private System.Windows.Forms.Label lblTotalLabel;
         private System.Windows.Forms.Label lblTotalAmount;
         private System.Windows.Forms.TextBox txtCashGiven;
         private System.Windows.Forms.Label lblChangeDue;
