@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.SQLite;
 using System.Drawing;
 using System.Globalization;
+using System.IO;
 using System.Windows.Forms;
 using CinemaManagement.Controls;
 using CinemaManagement.Data;
@@ -20,6 +21,8 @@ namespace CinemaManagement.Forms.Staff
         private int loggedInUserId;
         private string loggedInUserName;
         private decimal currentTotal = 0;
+        private decimal currentTicketRevenue = 0;
+        private decimal currentComboRevenue = 0;
         private string selectedMovie = "";
         private string selectedShowtime = "";
         private decimal selectedTicketPrice = 110000;
@@ -67,6 +70,7 @@ namespace CinemaManagement.Forms.Staff
 
         private class ComboDetail
         {
+            public int ComboId { get; set; }
             public string Name { get; set; }
             public decimal Price { get; set; }
             public string Description { get; set; }
@@ -83,6 +87,7 @@ namespace CinemaManagement.Forms.Staff
             loggedInUserName = userName;
 
             SetupCustomUI();
+            BindPaymentMethodEvents();
             SetupEvents();
             LoadFullMoviesFromDatabase();
             LoadShowtimesFromDatabase();
@@ -94,6 +99,7 @@ namespace CinemaManagement.Forms.Staff
             InitializeSeatMapControl();
             BuildDynamicComboCatalog();
             UpdateOrderItems();
+            ApplyPaymentModeUI();
             UpdateTotalDisplay();
         }
 
@@ -113,6 +119,172 @@ namespace CinemaManagement.Forms.Staff
             dgvOrderItems.RowTemplate.Height = 38;
 
             if (pnlComboCatalog != null) pnlComboCatalog.Location = new Point(230, 500);
+        }
+
+        private void BindPaymentMethodEvents()
+        {
+            EventHandler onMethodChanged = (_, _) =>
+            {
+                ApplyPaymentModeUI();
+                UpdateTotalDisplay();
+            };
+
+            if (rdoCashMethod != null)
+            {
+                rdoCashMethod.CheckedChanged -= onMethodChanged;
+                rdoCashMethod.CheckedChanged += onMethodChanged;
+            }
+
+            if (rdoQrMethod != null)
+            {
+                rdoQrMethod.CheckedChanged -= onMethodChanged;
+                rdoQrMethod.CheckedChanged += onMethodChanged;
+            }
+        }
+
+        private Image? LoadIntegratedQrImage()
+        {
+            string[] possibleFiles = { "My qr.jpg", "my_qr.png", "my_qr.jpg", "my_qr.jpeg" };
+            string finalPath = "";
+
+            foreach (var fileName in possibleFiles)
+            {
+                string path1 = Path.Combine(Application.StartupPath, "Image", fileName);
+                string path2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Image", fileName);
+
+                if (File.Exists(path1)) { finalPath = path1; break; }
+                if (File.Exists(path2)) { finalPath = path2; break; }
+            }
+
+            if (!string.IsNullOrEmpty(finalPath))
+            {
+                try
+                {
+                    using var stream = new FileStream(finalPath, FileMode.Open, FileAccess.Read);
+                    using var tempImg = Image.FromStream(stream);
+                    return new Bitmap(tempImg);
+                }
+                catch
+                {
+                }
+            }
+
+            string payload = $"CINELUXE|{selectedShowtimeId}|{selectedMovie}|{currentTotal:0}";
+            Bitmap fallbackBmp = new Bitmap(220, 220);
+            using (Graphics g = Graphics.FromImage(fallbackBmp))
+            {
+                g.Clear(Color.White);
+                int grid = 21;
+                int cell = 9;
+                int offset = 15;
+                int seed = Math.Abs(payload.GetHashCode());
+
+                for (int y = 0; y < grid; y++)
+                {
+                    for (int x = 0; x < grid; x++)
+                    {
+                        bool tl = x < 7 && y < 7;
+                        bool tr = x >= grid - 7 && y < 7;
+                        bool bl = x < 7 && y >= grid - 7;
+                        bool isFinder = tl || tr || bl;
+
+                        bool draw;
+                        if (isFinder)
+                        {
+                            int fx = tr ? x - (grid - 7) : x;
+                            int fy = bl ? y - (grid - 7) : y;
+                            bool outer = fx == 0 || fx == 6 || fy == 0 || fy == 6;
+                            bool inner = fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4;
+                            draw = outer || inner;
+                        }
+                        else
+                        {
+                            int bit = (x * 13 + y * 29 + seed) % 31;
+                            draw = ((seed >> bit) ^ (x * 3 + y * 5)) % 2 == 0;
+                        }
+
+                        if (draw)
+                        {
+                            g.FillRectangle(Brushes.Black, offset + x * cell, offset + y * cell, cell, cell);
+                        }
+                    }
+                }
+            }
+
+            return fallbackBmp;
+        }
+
+        private void ApplyPaymentModeUI()
+        {
+            bool isQr = rdoQrMethod != null && rdoQrMethod.Checked;
+
+            if (pnlCashBox != null)
+            {
+                pnlCashBox.Visible = !isQr;
+            }
+            else if (txtCashGiven != null && lblChangeDue != null)
+            {
+                txtCashGiven.Visible = !isQr;
+                lblChangeDue.Visible = !isQr;
+            }
+
+            if (picQrCode != null)
+            {
+                picQrCode.Visible = isQr;
+            }
+
+            if (pnlRightQrSlot != null)
+            {
+                pnlRightQrSlot.Visible = isQr;
+                if (isQr)
+                {
+                    pnlRightQrSlot.BringToFront();
+                }
+            }
+
+            if (lblQrHint != null)
+            {
+                lblQrHint.Text = isQr
+                    ? $"Quét mã QR phía trên • {currentTotal:N0} đ"
+                    : "Thanh toán tiền mặt tại quầy";
+            }
+
+            if (isQr && txtCashGiven != null)
+            {
+                txtCashGiven.Text = currentTotal.ToString("0");
+                errorProvider.SetError(txtCashGiven, string.Empty);
+            }
+
+            RefreshQrCodeImages(isQr);
+        }
+
+        private void RefreshQrCodeImages(bool isQr)
+        {
+            if (!isQr) return;
+
+            if (lblRightQrCaption != null)
+            {
+                lblRightQrCaption.Text = $"Số tiền thanh toán: {currentTotal:N0} VNĐ";
+            }
+
+            var qrImg = LoadIntegratedQrImage();
+            if (picQrCode != null)
+            {
+                var oldSmall = picQrCode.Image;
+                picQrCode.Image = qrImg != null ? new Bitmap(qrImg) : null;
+                oldSmall?.Dispose();
+            }
+
+            if (picRightQr != null)
+            {
+                var oldRight = picRightQr.Image;
+                picRightQr.Image = qrImg;
+                oldRight?.Dispose();
+            }
+            else
+            {
+                qrImg?.Dispose();
+            }
         }
 
         private void InitializeSeatMapControl()
@@ -299,22 +471,41 @@ namespace CinemaManagement.Forms.Staff
             dbCombos.Clear();
             try
             {
-                string query = "SELECT ComboName as Name, Price, ImagePath as Description FROM ComboItems;";
                 using (SQLiteConnection conn = new SQLiteConnection(connectionString))
                 {
                     conn.Open();
+                    var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    using (var pragma = new SQLiteCommand("PRAGMA table_info(ComboItems);", conn))
+                    using (var r = pragma.ExecuteReader())
+                    {
+                        while (r.Read())
+                        {
+                            string? cName = r["name"]?.ToString();
+                            if (!string.IsNullOrWhiteSpace(cName)) cols.Add(cName);
+                        }
+                    }
+
+                    string idCol = cols.Contains("ComboId") ? "ComboId" : (cols.Contains("Id") ? "Id" : "rowid");
+                    string nameCol = cols.Contains("ComboName") ? "ComboName" : (cols.Contains("Name") ? "Name" : "''");
+                    string descCol = cols.Contains("ImagePath") ? "ImagePath" : (cols.Contains("Description") ? "Description" : "''");
+
+                    string query = $"SELECT {idCol} AS CId, {nameCol} AS Name, Price, {descCol} AS Description FROM ComboItems;";
                     using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
                     {
                         using (SQLiteDataReader reader = cmd.ExecuteReader())
                         {
+                            int idx = 1;
                             while (reader.Read())
                             {
+                                int cId = reader["CId"] != DBNull.Value ? Convert.ToInt32(reader["CId"]) : idx;
                                 dbCombos.Add(new ComboDetail
                                 {
-                                    Name = reader["Name"].ToString(),
+                                    ComboId = cId > 0 ? cId : idx,
+                                    Name = reader["Name"]?.ToString() ?? $"Combo {idx}",
                                     Price = Convert.ToDecimal(reader["Price"]),
                                     Description = reader["Description"]?.ToString() ?? "Combo F&B"
                                 });
+                                idx++;
                             }
                         }
                     }
@@ -326,9 +517,9 @@ namespace CinemaManagement.Forms.Staff
 
             if (dbCombos.Count == 0)
             {
-                dbCombos.Add(new ComboDetail { Name = "Combo Solo", Price = 79000, Description = "1 Bắp + 1 Nước" });
-                dbCombos.Add(new ComboDetail { Name = "Combo Couple", Price = 129000, Description = "1 Bắp + 2 Nước" });
-                dbCombos.Add(new ComboDetail { Name = "Combo Family", Price = 179000, Description = "2 Bắp + 3 Nước" });
+                dbCombos.Add(new ComboDetail { ComboId = 1, Name = "Combo Solo", Price = 79000, Description = "1 Bắp + 1 Nước" });
+                dbCombos.Add(new ComboDetail { ComboId = 2, Name = "Combo Couple", Price = 129000, Description = "1 Bắp + 2 Nước" });
+                dbCombos.Add(new ComboDetail { ComboId = 3, Name = "Combo Family", Price = 179000, Description = "2 Bắp + 3 Nước" });
             }
         }
 
@@ -530,21 +721,41 @@ namespace CinemaManagement.Forms.Staff
             }
         }
 
+        private (decimal TicketTotal, decimal ComboTotal) CalculateRevenueSplit()
+        {
+            decimal ticketsTotal = 0m;
+            decimal combosTotal = 0m;
+
+            foreach (var seat in selectedSeats)
+            {
+                if (dbSeats.TryGetValue(seat, out var seatInfo) && seatInfo.Price > 0)
+                {
+                    ticketsTotal += seatInfo.Price;
+                }
+                else
+                {
+                    ticketsTotal += selectedTicketPrice;
+                }
+            }
+
+            foreach (var combo in selectedCombos)
+            {
+                combosTotal += combo.Price;
+            }
+
+            return (ticketsTotal, combosTotal);
+        }
+
         private void UpdateOrderItems()
         {
             dgvOrderItems.Rows.Clear();
-            decimal ticketsTotal = 0;
-            decimal combosTotal = 0;
+            var split = CalculateRevenueSplit();
+            decimal ticketsTotal = split.TicketTotal;
+            decimal combosTotal = split.ComboTotal;
 
             if (selectedSeats.Count > 0)
             {
                 string seatsStr = string.Join(", ", selectedSeats);
-                foreach (var seat in selectedSeats)
-                {
-                    if (dbSeats.ContainsKey(seat)) ticketsTotal += dbSeats[seat].Price;
-                    else ticketsTotal += selectedTicketPrice;
-                }
-
                 dgvOrderItems.Rows.Add(new object[]
                 {
                     $"{selectedMovie}\nGhế: {seatsStr} ({selectedShowtime})", selectedSeats.Count.ToString("D2"),
@@ -554,12 +765,13 @@ namespace CinemaManagement.Forms.Staff
 
             foreach (var combo in selectedCombos)
             {
-                combosTotal += combo.Price;
                 dgvOrderItems.Rows.Add(new object[]
                     { $"{combo.Name}\n{combo.Description}", "01", $"{combo.Price:N0} đ" });
             }
 
             dgvOrderItems.ClearSelection();
+            currentTicketRevenue = ticketsTotal;
+            currentComboRevenue = combosTotal;
             currentTotal = ticketsTotal + combosTotal;
             UpdateTotalDisplay();
         }
@@ -611,6 +823,12 @@ namespace CinemaManagement.Forms.Staff
                     return;
                 }
 
+                bool isQr = rdoQrMethod != null && rdoQrMethod.Checked;
+                if (isQr && txtCashGiven != null && string.IsNullOrWhiteSpace(txtCashGiven.Text))
+                {
+                    txtCashGiven.Text = currentTotal.ToString("0");
+                }
+
                 decimal cashGiven = ParseMoney(txtCashGiven.Text);
                 if (string.IsNullOrWhiteSpace(txtCashGiven.Text) || cashGiven < currentTotal)
                 {
@@ -623,7 +841,13 @@ namespace CinemaManagement.Forms.Staff
                 errorProvider.SetError(btnCheckout, string.Empty);
                 errorProvider.SetError(txtCashGiven, string.Empty);
 
-                SaveTransactionToDatabase(currentTotal, cashGiven);
+                var split = CalculateRevenueSplit();
+                currentTicketRevenue = split.TicketTotal;
+                currentComboRevenue = split.ComboTotal;
+                currentTotal = currentTicketRevenue + currentComboRevenue;
+
+                string paymentMethod = isQr ? "QR_MOMO" : "CASH";
+                SaveTransactionToDatabase(currentTotal, currentTicketRevenue, currentComboRevenue, cashGiven, paymentMethod);
                 MessageBox.Show("Đã thanh toán và lưu giao dịch thành công vào cơ sở dữ liệu!", "Hoàn Tất",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 selectedSeats.Clear();
@@ -652,36 +876,215 @@ namespace CinemaManagement.Forms.Staff
             txtCashGiven.TextChanged += (s, e) => UpdateTotalDisplay();
         }
 
-        private void SaveTransactionToDatabase(decimal totalAmount, decimal cashGiven)
+        private class ColumnMeta
+        {
+            public string Name { get; set; } = "";
+            public string Type { get; set; } = "";
+            public bool NotNull { get; set; }
+            public bool HasDefault { get; set; }
+            public bool IsPrimaryKey { get; set; }
+        }
+
+        private List<ColumnMeta> GetBookingCombosColumns(SQLiteConnection conn)
+        {
+            using (var createCmd = new SQLiteCommand(@"
+                CREATE TABLE IF NOT EXISTS BookingCombos (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    BookingId INTEGER NOT NULL,
+                    ComboId INTEGER NOT NULL DEFAULT 1,
+                    ComboName TEXT NOT NULL,
+                    Quantity INTEGER NOT NULL DEFAULT 1,
+                    UnitPrice NUMERIC NOT NULL DEFAULT 0,
+                    TotalPrice NUMERIC NOT NULL DEFAULT 0
+                );", conn))
+            {
+                createCmd.ExecuteNonQuery();
+            }
+
+            var cols = new List<ColumnMeta>();
+            using (var pragmaCmd = new SQLiteCommand("PRAGMA table_info(BookingCombos);", conn))
+            using (var reader = pragmaCmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    cols.Add(new ColumnMeta
+                    {
+                        Name = reader["name"]?.ToString() ?? "",
+                        Type = reader["type"]?.ToString() ?? "",
+                        NotNull = reader["notnull"] != DBNull.Value && Convert.ToInt32(reader["notnull"]) != 0,
+                        HasDefault = reader["dflt_value"] != DBNull.Value,
+                        IsPrimaryKey = reader["pk"] != DBNull.Value && Convert.ToInt32(reader["pk"]) != 0
+                    });
+                }
+            }
+
+            return cols;
+        }
+
+        private int ResolveComboId(SQLiteConnection conn, string comboName, int fallbackId)
+        {
+            if (fallbackId > 0) return fallbackId;
+            try
+            {
+                var itemCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                using (var pragma = new SQLiteCommand("PRAGMA table_info(ComboItems);", conn))
+                using (var r = pragma.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        string? cName = r["name"]?.ToString();
+                        if (!string.IsNullOrWhiteSpace(cName)) itemCols.Add(cName);
+                    }
+                }
+
+                string idCol = itemCols.Contains("ComboId") ? "ComboId" : (itemCols.Contains("Id") ? "Id" : "");
+                string nameCol = itemCols.Contains("ComboName") ? "ComboName" : (itemCols.Contains("Name") ? "Name" : "");
+                if (!string.IsNullOrEmpty(idCol) && !string.IsNullOrEmpty(nameCol))
+                {
+                    using (var cmd = new SQLiteCommand($"SELECT {idCol} FROM ComboItems WHERE {nameCol} = @Name LIMIT 1;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Name", comboName);
+                        object? val = cmd.ExecuteScalar();
+                        if (val != null && val != DBNull.Value)
+                        {
+                            int parsed = Convert.ToInt32(val);
+                            if (parsed > 0) return parsed;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return 1;
+        }
+
+        private void SaveBookingCombosToSqlite(int bookingId, List<ComboDetail> combosSnapshot)
+        {
+            if (bookingId <= 0 || combosSnapshot.Count == 0) return;
+
+            var grouped = new Dictionary<string, (int ComboId, int Quantity, decimal UnitPrice, decimal TotalPrice)>(StringComparer.OrdinalIgnoreCase);
+            foreach (var combo in combosSnapshot)
+            {
+                string key = combo.Name ?? "Combo F&B";
+                if (grouped.TryGetValue(key, out var current))
+                {
+                    int newQty = current.Quantity + 1;
+                    decimal newTotal = current.TotalPrice + combo.Price;
+                    grouped[key] = (current.ComboId, newQty, combo.Price, newTotal);
+                }
+                else
+                {
+                    grouped[key] = (combo.ComboId > 0 ? combo.ComboId : 1, 1, combo.Price, combo.Price);
+                }
+            }
+
+            using (var conn = new SQLiteConnection(connectionString))
+            {
+                conn.Open();
+                var cols = GetBookingCombosColumns(conn);
+
+                foreach (var kvp in grouped)
+                {
+                    int resolvedComboId = ResolveComboId(conn, kvp.Key, kvp.Value.ComboId);
+                    var insertCols = new List<string>();
+                    var insertParams = new List<string>();
+                    var cmd = new SQLiteCommand(conn);
+
+                    foreach (var col in cols)
+                    {
+                        if (col.IsPrimaryKey && col.Type.IndexOf("INT", StringComparison.OrdinalIgnoreCase) >= 0)
+                            continue;
+
+                        string colLower = col.Name.ToLowerInvariant();
+                        object? valueToBind = null;
+
+                        if (colLower == "bookingid")
+                            valueToBind = bookingId;
+                        else if (colLower == "comboid")
+                            valueToBind = resolvedComboId;
+                        else if (colLower == "comboname" || colLower == "name")
+                            valueToBind = kvp.Key;
+                        else if (colLower == "quantity" || colLower == "qty")
+                            valueToBind = kvp.Value.Quantity;
+                        else if (colLower == "unitprice" || colLower == "price")
+                            valueToBind = kvp.Value.UnitPrice;
+                        else if (colLower == "totalprice" || colLower == "amount" || colLower == "subtotal")
+                            valueToBind = kvp.Value.TotalPrice;
+                        else if (col.NotNull && !col.HasDefault)
+                        {
+                            valueToBind = col.Type.IndexOf("INT", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                          col.Type.IndexOf("DEC", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                          col.Type.IndexOf("NUM", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                          col.Type.IndexOf("REAL", StringComparison.OrdinalIgnoreCase) >= 0
+                                ? 0
+                                : "";
+                        }
+
+                        if (valueToBind != null)
+                        {
+                            string paramName = "@" + col.Name;
+                            insertCols.Add(col.Name);
+                            insertParams.Add(paramName);
+                            cmd.Parameters.AddWithValue(paramName, valueToBind);
+                        }
+                    }
+
+                    if (insertCols.Count > 0)
+                    {
+                        cmd.CommandText = $"INSERT INTO BookingCombos ({string.Join(", ", insertCols)}) VALUES ({string.Join(", ", insertParams)});";
+                        cmd.ExecuteNonQuery();
+                    }
+                    cmd.Dispose();
+                }
+            }
+        }
+
+        private void SaveTransactionToDatabase(
+            decimal totalAmount,
+            decimal ticketRevenue,
+            decimal comboRevenue,
+            decimal cashGiven,
+            string paymentMethod)
         {
             decimal changeReturned = cashGiven - totalAmount;
+            var combosSnapshot = new List<ComboDetail>(selectedCombos);
+            string comboSummary = combosSnapshot.Count > 0
+                ? " | Combo: " + string.Join(", ", combosSnapshot.ConvertAll(c => c.Name))
+                : "";
 
             try
             {
+                int bookingId = 0;
                 using (var db = new CinemaDbContext())
                 {
                     var booking = new Booking
                     {
                         MovieTitle = selectedMovie,
-                        ShowtimeInfo = selectedShowtime,
+                        ShowtimeInfo = $"{selectedShowtime}{comboSummary} [Vé: {ticketRevenue:N0}đ | Combo: {comboRevenue:N0}đ]",
                         TotalAmount = totalAmount,
                         CreatedAt = DateTime.Now
                     };
                     db.Bookings.Add(booking);
                     db.SaveChanges();
+                    bookingId = booking.Id;
+
                     var payment = new Payment
                     {
                         BookingId = booking.Id,
                         Amount = totalAmount,
                         CashGiven = cashGiven,
                         ChangeReturned = changeReturned < 0 ? 0 : changeReturned,
-                        PaymentMethod = "CASH",
+                        PaymentMethod = paymentMethod,
                         Status = "SUCCESS",
                         PaymentDate = DateTime.Now
                     };
                     db.Payments.Add(payment);
                     db.SaveChanges();
                 }
+
+                SaveBookingCombosToSqlite(bookingId, combosSnapshot);
             }
             catch (Exception ex)
             {
@@ -705,6 +1108,13 @@ namespace CinemaManagement.Forms.Staff
             {
                 lblChangeDue.Text = "TIỀN THỐI LẠI: Không đủ";
                 lblChangeDue.ForeColor = Color.FromArgb(239, 68, 68);
+            }
+
+            bool isQr = rdoQrMethod != null && rdoQrMethod.Checked;
+            if (isQr)
+            {
+                if (lblQrHint != null) lblQrHint.Text = $"Quét mã QR phía trên • {currentTotal:N0} đ";
+                RefreshQrCodeImages(true);
             }
         }
 
