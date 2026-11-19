@@ -1,26 +1,34 @@
 ﻿using System;
 using System.Drawing;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using CinemaManagement.Data;
-using CinemaManagement.Models;
-using System.IO;
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 
 namespace CinemaManagement.Forms.Kiosk
 {
- public partial class FrmKioskShowtime : Form
+    public partial class FrmKioskShowtime : Form
     {
-        private int _movieId;
+        private readonly int _movieId;
         private int _selectedShowtimeId = 0;
-        private System.Windows.Forms.Timer _timer;
+        private readonly System.Windows.Forms.Timer _timer;
         private DateTime _selectedDate = DateTime.Today;
 
         public FrmKioskShowtime(int movieId)
         {
             _movieId = movieId;
             InitializeComponent();
+
+            _timer = new System.Windows.Forms.Timer { Interval = 1000 };
+            _timer.Tick += (_, _) =>
+            {
+                if (lblClock != null && !lblClock.IsDisposed)
+                    lblClock.Text = DateTime.Now.ToString("HH:mm:ss");
+            };
+            _timer.Start();
+
             RegisterEvents();
             LoadShowtimes();
             LoadMovieLeftInfo();
@@ -29,9 +37,18 @@ namespace CinemaManagement.Forms.Kiosk
 
         private void RegisterEvents()
         {
-            btnBack.Click += (s, e) =>
+            this.VisibleChanged += (_, _) =>
             {
-                _timer?.Stop();
+                if (this.Visible)
+                {
+                    _timer.Start();
+                    LoadShowtimes();
+                }
+            };
+
+            btnBack.Click += (_, _) =>
+            {
+                _timer.Stop();
                 var home = Application.OpenForms.OfType<FrmKioskHome>().FirstOrDefault();
                 if (home != null)
                 {
@@ -48,9 +65,9 @@ namespace CinemaManagement.Forms.Kiosk
                 this.Close();
             };
 
-            btnExit.Click += (s, e) =>
+            btnExit.Click += (_, _) =>
             {
-                _timer?.Stop();
+                _timer.Stop();
                 Form? mainForm = Application.OpenForms.Cast<Form>()
                     .FirstOrDefault(f => f.Name == "FrmMain" || f.Name == "FrmRoleSelection" || f.Tag?.ToString() == "Main");
                 if (mainForm != null)
@@ -60,24 +77,28 @@ namespace CinemaManagement.Forms.Kiosk
                 this.Close();
             };
 
-            btnContinue.Click += (s, e) =>
+            btnContinue.Click += (_, _) =>
             {
-                if (_selectedShowtimeId > 0)
+                if (_selectedShowtimeId <= 0)
                 {
-                    FrmKioskSeat frmSeat = new FrmKioskSeat(_selectedShowtimeId);
-                    frmSeat.TopMost = true;
-                    frmSeat.Show();
-                    this.Hide();
+                    MessageBox.Show("Vui lòng chọn một suất chiếu trước khi chọn ghế!", "Thông Báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
                 }
-            };
 
-            _timer = new System.Windows.Forms.Timer { Interval = 1000 };
-            _timer.Tick += (s, e) =>
-            {
-                if (lblClock != null && !lblClock.IsDisposed)
-                    lblClock.Text = DateTime.Now.ToString("HH:mm:ss");
+                _timer.Stop();
+                FrmKioskSeat frmSeat = new FrmKioskSeat(_selectedShowtimeId);
+                frmSeat.TopMost = true;
+                frmSeat.FormClosed += (_, _) =>
+                {
+                    if (!this.IsDisposed)
+                    {
+                        this.Show();
+                        this.Activate();
+                    }
+                };
+                frmSeat.Show();
+                this.Hide();
             };
-            _timer.Start();
         }
 
         private void FilterShowtimes(string format)
@@ -96,7 +117,7 @@ namespace CinemaManagement.Forms.Kiosk
                 query = query.Where(st => st.Room == null || !st.Room.RoomName.Contains("IMAX"));
             }
 
-            var filteredShowtimes = query.ToList();
+            _ = query.ToList();
             LoadShowtimes();
         }
 
@@ -131,12 +152,12 @@ namespace CinemaManagement.Forms.Kiosk
                 {
                     try
                     {
-                        using (var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read))
-                        {
-                            picLeftPoster.Image = Image.FromStream(stream);
-                        }
+                        using var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read);
+                        picLeftPoster.Image = Image.FromStream(stream);
                     }
-                    catch { }
+                    catch
+                    {
+                    }
                 }
             }
 
@@ -207,7 +228,7 @@ namespace CinemaManagement.Forms.Kiosk
             for (int i = 0; i < 4; i++)
             {
                 DateTime targetDate = today.AddDays(i);
-                string dateTitle = "";
+                string dateTitle;
 
                 if (i == 0) dateTitle = $"HÔM NAY {targetDate:dd/MM}";
                 else if (i == 1) dateTitle = $"NGÀY MAI {targetDate:dd/MM}";
@@ -221,8 +242,8 @@ namespace CinemaManagement.Forms.Kiosk
                 {
                     Text = dateTitle,
                     Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                    ForeColor = (targetDate.Date == _selectedDate.Date) ? ColorTranslator.FromHtml("#101418") : ColorTranslator.FromHtml("#c1c7cf"),
-                    BackColor = (targetDate.Date == _selectedDate.Date) ? ColorTranslator.FromHtml("#38bdf8") : ColorTranslator.FromHtml("#181c20"),
+                    ForeColor = targetDate.Date == _selectedDate.Date ? ColorTranslator.FromHtml("#101418") : ColorTranslator.FromHtml("#c1c7cf"),
+                    BackColor = targetDate.Date == _selectedDate.Date ? ColorTranslator.FromHtml("#38bdf8") : ColorTranslator.FromHtml("#181c20"),
                     FlatStyle = FlatStyle.Flat,
                     Size = new Size(180, 60),
                     Margin = new Padding(0, 0, 16, 0),
@@ -231,7 +252,7 @@ namespace CinemaManagement.Forms.Kiosk
                 };
                 btnDate.FlatAppearance.BorderSize = 0;
 
-                btnDate.Click += (s, e) =>
+                btnDate.Click += (s, _) =>
                 {
                     if (s is Button clickedBtn && clickedBtn.Tag is DateTime dt)
                     {
@@ -255,6 +276,7 @@ namespace CinemaManagement.Forms.Kiosk
 
             using var db = new CinemaDbContext();
             var showtimes = db.Showtimes
+                .Include(s => s.Room)
                 .Where(s => s.MovieId == _movieId && s.StartTime.Date == _selectedDate.Date)
                 .OrderBy(s => s.StartTime)
                 .ToList();
@@ -289,25 +311,39 @@ namespace CinemaManagement.Forms.Kiosk
             foreach (var st in showtimes)
             {
                 bool isPast = st.StartTime < now;
+                int totalSeats = db.Seats.Count(seat => seat.RoomId == st.RoomId);
+                if (totalSeats == 0) totalSeats = 140;
+
+                int bookedSeats = db.Tickets.Count(t => t.ShowtimeId == st.ShowtimeId);
+                int heldSeats = db.SeatHolds.Count(h => h.ShowtimeId == st.ShowtimeId && h.ExpiresAt > now);
+                int availableSeats = Math.Max(0, totalSeats - bookedSeats - heldSeats);
+                bool isSoldOut = availableSeats == 0;
+                bool isDisabled = isPast || isSoldOut;
+
+                string statusText = isPast
+                    ? $"{st.StartTime:HH:mm}\n(Đã chiếu)"
+                    : isSoldOut
+                        ? $"{st.StartTime:HH:mm}\nPhòng {st.RoomId}\n(Hết ghế)"
+                        : $"{st.StartTime:HH:mm}\nPhòng {st.RoomId}\nCòn {availableSeats} ghế";
 
                 Button btnTime = new Button
                 {
-                    Text = isPast ? $"{st.StartTime:HH:mm}\n(Đã chiếu)" : $"{st.StartTime:HH:mm}\nPhòng {st.RoomId}\nCòn 140 ghế",
+                    Text = statusText,
                     Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                    ForeColor = isPast ? ColorTranslator.FromHtml("#64748B") : Color.White,
-                    BackColor = isPast ? ColorTranslator.FromHtml("#0F172A") : ColorTranslator.FromHtml("#181c20"),
+                    ForeColor = isDisabled ? ColorTranslator.FromHtml("#64748B") : Color.White,
+                    BackColor = isDisabled ? ColorTranslator.FromHtml("#0F172A") : ColorTranslator.FromHtml("#181c20"),
                     Size = new Size(160, 90),
                     Margin = new Padding(0, 0, 20, 20),
                     FlatStyle = FlatStyle.Flat,
-                    Enabled = !isPast,
-                    Cursor = isPast ? Cursors.No : Cursors.Hand,
+                    Enabled = !isDisabled,
+                    Cursor = isDisabled ? Cursors.No : Cursors.Hand,
                     Tag = st.ShowtimeId
                 };
-                btnTime.FlatAppearance.BorderColor = isPast ? ColorTranslator.FromHtml("#1E293B") : ColorTranslator.FromHtml("#40484f");
+                btnTime.FlatAppearance.BorderColor = isDisabled ? ColorTranslator.FromHtml("#1E293B") : ColorTranslator.FromHtml("#40484f");
 
-                if (!isPast)
+                if (!isDisabled)
                 {
-                    btnTime.Click += (s, e) =>
+                    btnTime.Click += (_, _) =>
                     {
                         foreach (Control ctrl in pnlShowtimes.Controls)
                         {
@@ -321,7 +357,8 @@ namespace CinemaManagement.Forms.Kiosk
                         btnTime.ForeColor = ColorTranslator.FromHtml("#101418");
                         _selectedShowtimeId = st.ShowtimeId;
 
-                        lblSelectedShowtimeSummary.Text = $"SUẤT CHIẾU ĐANG CHỌN: IMAX LASER 4K • Phòng Chiếu {st.RoomId} • {st.StartTime:HH:mm}";
+                        string roomLabel = st.Room?.RoomName ?? $"Phòng Chiếu {st.RoomId}";
+                        lblSelectedShowtimeSummary.Text = $"SUẤT CHIẾU ĐANG CHỌN: {roomLabel} • {st.StartTime:HH:mm}";
                         btnContinue.Enabled = true;
                         btnContinue.BackColor = ColorTranslator.FromHtml("#ffb961");
                     };
@@ -330,8 +367,5 @@ namespace CinemaManagement.Forms.Kiosk
                 pnlShowtimes.Controls.Add(btnTime);
             }
         }
-
-        pnlShowtimes.Controls.Add(btnTime);
     }
-}
 }
