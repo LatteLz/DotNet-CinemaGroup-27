@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data.SQLite;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
 using CinemaManagement.Forms.Staff;
@@ -142,15 +144,145 @@ namespace CinemaManagement.Forms.Staff
             if (btnExportExcel != null) btnExportExcel.Click += BtnExportExcel_Click;
         }
 
+        private bool ShowAddComboDialog(out string comboName, out decimal price, out string description)
+        {
+            comboName = "";
+            price = 0m;
+            description = "";
+
+            using (Form dlg = new Form())
+            {
+                dlg.Text = "Thêm Combo Bắp Nước Mới";
+                dlg.Size = new Size(420, 260);
+                dlg.StartPosition = FormStartPosition.CenterParent;
+                dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dlg.MaximizeBox = false;
+                dlg.MinimizeBox = false;
+                dlg.BackColor = ColorSurfaceContainer;
+                dlg.ForeColor = ColorTextWhite;
+
+                Label lblName = new Label
+                {
+                    Text = "Tên combo bắp nước:",
+                    Location = new Point(20, 18),
+                    Size = new Size(360, 20),
+                    Font = FontInterBold,
+                    ForeColor = ColorTextMuted
+                };
+                TextBox txtName = new TextBox
+                {
+                    Location = new Point(20, 40),
+                    Size = new Size(365, 26),
+                    BackColor = ColorBg,
+                    ForeColor = ColorTextWhite,
+                    BorderStyle = BorderStyle.FixedSingle,
+                    Text = "Combo Bắp Nước Mới"
+                };
+
+                Label lblPrice = new Label
+                {
+                    Text = "Giá niêm yết (VNĐ):",
+                    Location = new Point(20, 74),
+                    Size = new Size(360, 20),
+                    Font = FontInterBold,
+                    ForeColor = ColorTextMuted
+                };
+                TextBox txtPrice = new TextBox
+                {
+                    Location = new Point(20, 96),
+                    Size = new Size(365, 26),
+                    BackColor = ColorBg,
+                    ForeColor = ColorTextWhite,
+                    BorderStyle = BorderStyle.FixedSingle,
+                    Text = "99000"
+                };
+
+                Label lblDesc = new Label
+                {
+                    Text = "Mô tả / Bắp nước đi kèm:",
+                    Location = new Point(20, 130),
+                    Size = new Size(360, 20),
+                    Font = FontInterBold,
+                    ForeColor = ColorTextMuted
+                };
+                TextBox txtDesc = new TextBox
+                {
+                    Location = new Point(20, 152),
+                    Size = new Size(365, 26),
+                    BackColor = ColorBg,
+                    ForeColor = ColorTextWhite,
+                    BorderStyle = BorderStyle.FixedSingle,
+                    Text = "1 Bắp ngọt + 1 Nước"
+                };
+
+                Button btnOk = new Button
+                {
+                    Text = "Lưu vào CSDL",
+                    DialogResult = DialogResult.OK,
+                    Location = new Point(195, 190),
+                    Size = new Size(105, 30),
+                    BackColor = ColorPrimaryBlue,
+                    ForeColor = ColorTextWhite,
+                    FlatStyle = FlatStyle.Flat
+                };
+                btnOk.FlatAppearance.BorderSize = 0;
+
+                Button btnCancel = new Button
+                {
+                    Text = "Hủy",
+                    DialogResult = DialogResult.Cancel,
+                    Location = new Point(308, 190),
+                    Size = new Size(77, 30),
+                    BackColor = ColorBorder,
+                    ForeColor = ColorTextWhite,
+                    FlatStyle = FlatStyle.Flat
+                };
+                btnCancel.FlatAppearance.BorderSize = 0;
+
+                dlg.Controls.AddRange(new Control[] { lblName, txtName, lblPrice, txtPrice, lblDesc, txtDesc, btnOk, btnCancel });
+                dlg.AcceptButton = btnOk;
+                dlg.CancelButton = btnCancel;
+
+                while (true)
+                {
+                    if (dlg.ShowDialog(this) != DialogResult.OK)
+                    {
+                        return false;
+                    }
+
+                    string inputName = txtName.Text.Trim();
+                    string rawPrice = txtPrice.Text.Replace("đ", "").Replace("VNĐ", "").Replace(".", "").Replace(",", "").Trim();
+                    string inputDesc = string.IsNullOrWhiteSpace(txtDesc.Text) ? "Bắp nước tiêu chuẩn" : txtDesc.Text.Trim();
+
+                    if (string.IsNullOrWhiteSpace(inputName))
+                    {
+                        MessageBox.Show("Tên combo bắp nước không được để trống!", "Lỗi Dữ Liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        txtName.Focus();
+                        continue;
+                    }
+
+                    if (!decimal.TryParse(rawPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal parsedPrice) || parsedPrice <= 0)
+                    {
+                        MessageBox.Show("Giá niêm yết phải là số lớn hơn 0!", "Lỗi Dữ Liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        txtPrice.Focus();
+                        continue;
+                    }
+
+                    comboName = inputName;
+                    price = parsedPrice;
+                    description = inputDesc;
+                    return true;
+                }
+            }
+        }
+
         private void BtnAddComboTop_Click(object sender, EventArgs e)
         {
-            string name = Microsoft.VisualBasic.Interaction.InputBox("Nhập tên combo F&B mới:", "Thêm Combo Mới", "Combo Đặc Biệt");
-            if (string.IsNullOrWhiteSpace(name))
+            if (!ShowAddComboDialog(out string name, out decimal price, out string description))
             {
-                errorProvider.SetError(btnAddComboTop, "Tên combo không được để trống!");
-                MessageBox.Show("Tên combo F&B không được để trống!", "Lỗi Dữ Liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+
             errorProvider.SetError(btnAddComboTop, string.Empty);
 
             try
@@ -158,15 +290,53 @@ namespace CinemaManagement.Forms.Staff
                 using (SQLiteConnection conn = new SQLiteConnection(connectionString))
                 {
                     conn.Open();
-                    string query = "INSERT INTO ComboItems (ComboName, Price, ImagePath) VALUES (@name, 99000, 'Bắp nước tiêu chuẩn');";
+
+                    using (var createCmd = new SQLiteCommand(@"
+                        CREATE TABLE IF NOT EXISTS ComboItems (
+                            ComboId INTEGER PRIMARY KEY AUTOINCREMENT,
+                            ComboName TEXT NOT NULL,
+                            Price NUMERIC NOT NULL DEFAULT 0,
+                            ImagePath TEXT
+                        );", conn))
+                    {
+                        createCmd.ExecuteNonQuery();
+                    }
+
+                    var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    using (var pragmaCmd = new SQLiteCommand("PRAGMA table_info(ComboItems);", conn))
+                    using (var reader = pragmaCmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            string? colName = reader["name"]?.ToString();
+                            if (!string.IsNullOrWhiteSpace(colName))
+                            {
+                                cols.Add(colName);
+                            }
+                        }
+                    }
+
+                    string nameCol = cols.Contains("ComboName") ? "ComboName" : (cols.Contains("Name") ? "Name" : "ComboName");
+                    string descCol = cols.Contains("ImagePath") ? "ImagePath" : (cols.Contains("Description") ? "Description" : "");
+
+                    string query = !string.IsNullOrEmpty(descCol)
+                        ? $"INSERT INTO ComboItems ({nameCol}, Price, {descCol}) VALUES (@name, @price, @desc);"
+                        : $"INSERT INTO ComboItems ({nameCol}, Price) VALUES (@name, @price);";
+
                     using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
                     {
                         cmd.Parameters.AddWithValue("@name", name);
+                        cmd.Parameters.AddWithValue("@price", price);
+                        if (!string.IsNullOrEmpty(descCol))
+                        {
+                            cmd.Parameters.AddWithValue("@desc", description);
+                        }
                         cmd.ExecuteNonQuery();
                     }
                 }
+
                 LoadDataFromDb();
-                MessageBox.Show("Thêm combo mới thành công!", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Đã thêm combo bắp nước và lưu vào CSDL thành công!", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -236,30 +406,50 @@ namespace CinemaManagement.Forms.Staff
             bool loaded = false;
             int totalProducts = 0;
             decimal totalInventoryValue = 0;
-            string query = "SELECT Combold, ComboName, Price, ImagePath FROM ComboItems;";
 
             try
             {
                 using (SQLiteConnection conn = new SQLiteConnection(connectionString))
                 {
                     conn.Open();
+
+                    var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    using (var pragmaCmd = new SQLiteCommand("PRAGMA table_info(ComboItems);", conn))
+                    using (var r = pragmaCmd.ExecuteReader())
+                    {
+                        while (r.Read())
+                        {
+                            string? cName = r["name"]?.ToString();
+                            if (!string.IsNullOrWhiteSpace(cName)) cols.Add(cName);
+                        }
+                    }
+
+                    string idCol = cols.Contains("ComboId") ? "ComboId" : (cols.Contains("Combold") ? "Combold" : (cols.Contains("Id") ? "Id" : "rowid"));
+                    string nameCol = cols.Contains("ComboName") ? "ComboName" : (cols.Contains("Name") ? "Name" : "''");
+                    string descCol = cols.Contains("ImagePath") ? "ImagePath" : (cols.Contains("Description") ? "Description" : "''");
+
+                    string query = $"SELECT {idCol} AS CId, {nameCol} AS CName, Price, {descCol} AS CDesc FROM ComboItems;";
                     using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
                     {
                         using (SQLiteDataReader reader = cmd.ExecuteReader())
                         {
+                            int idx = 1;
                             while (reader.Read())
                             {
                                 totalProducts++;
-                                string id = reader["Combold"].ToString();
-                                string name = reader["ComboName"].ToString();
-                                decimal price = reader.GetDecimal(reader.GetOrdinal("Price"));
-                                string imagePath = reader["ImagePath"]?.ToString() ?? "Bắp nước tiêu chuẩn";
+                                string id = reader["CId"] != DBNull.Value && reader["CId"] != null ? reader["CId"].ToString()! : idx.ToString("D3");
+                                string name = reader["CName"]?.ToString() ?? $"Combo {idx}";
+                                decimal price = reader["Price"] != DBNull.Value && reader["Price"] != null
+                                    ? Convert.ToDecimal(reader["Price"], CultureInfo.InvariantCulture)
+                                    : 0m;
+                                string imagePath = reader["CDesc"]?.ToString() ?? "Bắp nước tiêu chuẩn";
 
                                 int stockQty = 30;
                                 totalInventoryValue += (price * 0.7m) * stockQty;
 
                                 AddComboRow($"SKU-CB-{id}", name, imagePath, "Combo tiết kiệm", "#0F2738", "#38BDF8", $"{price * 0.7m:N0} đ", $"{price:N0} đ", stockQty.ToString());
                                 loaded = true;
+                                idx++;
                             }
                         }
                     }
