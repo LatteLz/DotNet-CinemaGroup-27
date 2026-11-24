@@ -1,11 +1,6 @@
-﻿using System;
-using System.Drawing;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Windows.Forms;
-using CinemaManagement.Data;
-using Microsoft.EntityFrameworkCore;
+﻿using System.Globalization;
+using CinemaManagement.Helpers;
+using CinemaManagement.Services;
 
 namespace CinemaManagement.Forms.Kiosk
 {
@@ -15,6 +10,8 @@ namespace CinemaManagement.Forms.Kiosk
         private int _selectedShowtimeId = 0;
         private readonly System.Windows.Forms.Timer _timer;
         private DateTime _selectedDate = DateTime.Today;
+        private readonly MovieService _movieService = new();
+        private readonly ShowtimeService _showtimeService = new();
 
         public FrmKioskShowtime(int movieId)
         {
@@ -33,6 +30,7 @@ namespace CinemaManagement.Forms.Kiosk
             LoadShowtimes();
             LoadMovieLeftInfo();
             RenderDateTabs();
+            WindowLayout.ScaleToScreen(this);
         }
 
         private void RegisterEvents()
@@ -68,13 +66,7 @@ namespace CinemaManagement.Forms.Kiosk
             btnExit.Click += (_, _) =>
             {
                 _timer.Stop();
-                Form? mainForm = Application.OpenForms.Cast<Form>()
-                    .FirstOrDefault(f => f.Name == "FrmMain" || f.Name == "FrmRoleSelection" || f.Tag?.ToString() == "Main");
-                if (mainForm != null)
-                {
-                    mainForm.Show();
-                }
-                this.Close();
+                KioskFlow.ExitKiosk(this);
             };
 
             btnContinue.Click += (_, _) =>
@@ -101,30 +93,18 @@ namespace CinemaManagement.Forms.Kiosk
             };
         }
 
-        private void FilterShowtimes(string format)
-        {
-            using var db = new CinemaDbContext();
-            var query = db.Showtimes
-                .Include(st => st.Room)
-                .Where(st => st.MovieId == _movieId && st.StartTime.Date == _selectedDate.Date);
-
-            if (format == "IMAX")
-            {
-                query = query.Where(st => st.Room != null && st.Room.RoomName.Contains("IMAX"));
-            }
-            else if (format == "Standard")
-            {
-                query = query.Where(st => st.Room == null || !st.Room.RoomName.Contains("IMAX"));
-            }
-
-            _ = query.ToList();
-            LoadShowtimes();
-        }
-
         private void LoadMovieLeftInfo()
         {
-            using var db = new CinemaDbContext();
-            var movie = db.Movies.FirstOrDefault(m => m.MovieId == _movieId);
+            Models.Movie? movie;
+            try
+            {
+                movie = _movieService.GetById(_movieId);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Không tải được thông tin phim: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
             if (movie == null) return;
 
             lblMovieTitle.Text = movie.Title.ToUpper();
@@ -134,37 +114,11 @@ namespace CinemaManagement.Forms.Kiosk
                 Size = new Size(350, 240),
                 Location = new Point(24, 65),
                 SizeMode = PictureBoxSizeMode.Zoom,
-                BackColor = ColorTranslator.FromHtml("#262a2f")
+                BackColor = ColorTranslator.FromHtml("#262a2f"),
+                Image = ImageHelper.Load(movie.PosterPath)
             };
 
-            string relativePath = movie.PosterPath ?? "";
-            if (!string.IsNullOrEmpty(relativePath))
-            {
-                string cleanPath = relativePath.TrimStart('/', '\\');
-                string fullPath = Path.Combine(Application.StartupPath, cleanPath);
-
-                if (!File.Exists(fullPath))
-                {
-                    fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", cleanPath);
-                }
-
-                if (File.Exists(fullPath))
-                {
-                    try
-                    {
-                        using var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read);
-                        picLeftPoster.Image = Image.FromStream(stream);
-                    }
-                    catch
-                    {
-                    }
-                }
-            }
-
-            var ageRatingProp = movie.GetType().GetProperty("AgeRating") ?? movie.GetType().GetProperty("Rating");
-            string ageRating = ageRatingProp?.GetValue(movie)?.ToString() ?? "T16";
-            if (string.IsNullOrWhiteSpace(ageRating)) ageRating = "T16";
-
+            string ageRating = string.IsNullOrWhiteSpace(movie.AgeRating) ? "P" : movie.AgeRating;
             Color badgeColor = ageRating.StartsWith("P") ? ColorTranslator.FromHtml("#10B981") : ColorTranslator.FromHtml("#EF4444");
 
             Label lblBadgeAge = new Label
@@ -178,9 +132,13 @@ namespace CinemaManagement.Forms.Kiosk
                 AutoSize = true
             };
 
+            string details = $"Thể loại: {movie.Genre}\nThời lượng: {movie.Duration} phút";
+            if (!string.IsNullOrWhiteSpace(movie.Country)) details += $"\nQuốc gia: {movie.Country}";
+            if (!string.IsNullOrWhiteSpace(movie.Director)) details += $"\nĐạo diễn: {movie.Director}";
+
             Label lblDetail = new Label
             {
-                Text = $"Thể loại: {movie.Genre}\nThời lượng: {movie.Duration} phút\nCông nghệ: IMAX LASER 4K\nĐánh giá: 8.8/10 ★",
+                Text = details,
                 Font = new Font("Segoe UI", 10F),
                 ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
                 Location = new Point(24, 360),
@@ -196,16 +154,9 @@ namespace CinemaManagement.Forms.Kiosk
                 AutoSize = true
             };
 
-            var descProperty = movie.GetType().GetProperty("Description");
-            string description = descProperty?.GetValue(movie)?.ToString() ?? "";
-            if (string.IsNullOrWhiteSpace(description))
-            {
-                description = $"Bộ phim {movie.Title} hứa hẹn mang đến những giây phút giải trí tuyệt vời với công nghệ âm thanh sống động.";
-            }
-
             Label lblDesc = new Label
             {
-                Text = description,
+                Text = string.IsNullOrWhiteSpace(movie.Description) ? "Chưa có mô tả." : movie.Description,
                 Font = new Font("Segoe UI", 9.5F),
                 ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
                 Location = new Point(24, 510),
@@ -225,7 +176,7 @@ namespace CinemaManagement.Forms.Kiosk
             pnlDates.Controls.Clear();
             DateTime today = DateTime.Today;
 
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < ShowtimeService.SalesWindowDays; i++)
             {
                 DateTime targetDate = today.AddDays(i);
                 string dateTitle;
@@ -274,12 +225,16 @@ namespace CinemaManagement.Forms.Kiosk
             btnContinue.BackColor = ColorTranslator.FromHtml("#282C31");
             lblSelectedShowtimeSummary.Text = "SUẤT CHIẾU ĐANG CHỌN: (Vui lòng chọn suất chiếu)";
 
-            using var db = new CinemaDbContext();
-            var showtimes = db.Showtimes
-                .Include(s => s.Room)
-                .Where(s => s.MovieId == _movieId && s.StartTime.Date == _selectedDate.Date)
-                .OrderBy(s => s.StartTime)
-                .ToList();
+            List<ShowtimeListItemDto> showtimes;
+            try
+            {
+                showtimes = _showtimeService.GetShowtimesForMovie(_movieId, _selectedDate);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Không tải được suất chiếu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
 
             if (!showtimes.Any())
             {
@@ -295,76 +250,76 @@ namespace CinemaManagement.Forms.Kiosk
                 return;
             }
 
-            Label lblRoomHeader = new Label
+            foreach (var roomGroup in showtimes.GroupBy(s => new { s.RoomId, s.RoomName, s.RoomType }))
             {
-                Text = "IMAX LASER 4K  •  Phòng Chiếu 01 (Màn hình vòm 26m) - Giá vé từ 160.000 đ",
-                Font = new Font("Segoe UI", 12F, FontStyle.Bold),
-                ForeColor = ColorTranslator.FromHtml("#ffb961"),
-                AutoSize = true,
-                Margin = new Padding(0, 0, 0, 16)
-            };
-            pnlShowtimes.Controls.Add(lblRoomHeader);
-            pnlShowtimes.SetFlowBreak(lblRoomHeader, true);
-
-            DateTime now = DateTime.Now;
-
-            foreach (var st in showtimes)
-            {
-                bool isPast = st.StartTime < now;
-                int totalSeats = db.Seats.Count(seat => seat.RoomId == st.RoomId);
-                if (totalSeats == 0) totalSeats = 140;
-
-                int bookedSeats = db.Tickets.Count(t => t.ShowtimeId == st.ShowtimeId);
-                int heldSeats = db.SeatHolds.Count(h => h.ShowtimeId == st.ShowtimeId && h.ExpiresAt > now);
-                int availableSeats = Math.Max(0, totalSeats - bookedSeats - heldSeats);
-                bool isSoldOut = availableSeats == 0;
-                bool isDisabled = isPast || isSoldOut;
-
-                string statusText = isPast
-                    ? $"{st.StartTime:HH:mm}\n(Đã chiếu)"
-                    : isSoldOut
-                        ? $"{st.StartTime:HH:mm}\nPhòng {st.RoomId}\n(Hết ghế)"
-                        : $"{st.StartTime:HH:mm}\nPhòng {st.RoomId}\nCòn {availableSeats} ghế";
-
-                Button btnTime = new Button
+                decimal minPrice = roomGroup.Min(s => s.Price);
+                Label lblRoomHeader = new Label
                 {
-                    Text = statusText,
-                    Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                    ForeColor = isDisabled ? ColorTranslator.FromHtml("#64748B") : Color.White,
-                    BackColor = isDisabled ? ColorTranslator.FromHtml("#0F172A") : ColorTranslator.FromHtml("#181c20"),
-                    Size = new Size(160, 90),
-                    Margin = new Padding(0, 0, 20, 20),
-                    FlatStyle = FlatStyle.Flat,
-                    Enabled = !isDisabled,
-                    Cursor = isDisabled ? Cursors.No : Cursors.Hand,
-                    Tag = st.ShowtimeId
+                    Text = $"{roomGroup.Key.RoomName.ToUpper()}  •  {roomGroup.Key.RoomType} - Giá vé từ {minPrice:N0} đ",
+                    Font = new Font("Segoe UI", 12F, FontStyle.Bold),
+                    ForeColor = ColorTranslator.FromHtml("#ffb961"),
+                    AutoSize = true,
+                    Margin = new Padding(0, 0, 0, 16)
                 };
-                btnTime.FlatAppearance.BorderColor = isDisabled ? ColorTranslator.FromHtml("#1E293B") : ColorTranslator.FromHtml("#40484f");
+                pnlShowtimes.Controls.Add(lblRoomHeader);
+                pnlShowtimes.SetFlowBreak(lblRoomHeader, true);
 
-                if (!isDisabled)
+                Control? lastButton = null;
+                foreach (var st in roomGroup)
                 {
-                    btnTime.Click += (_, _) =>
-                    {
-                        foreach (Control ctrl in pnlShowtimes.Controls)
-                        {
-                            if (ctrl is Button b && b.Enabled)
-                            {
-                                b.BackColor = ColorTranslator.FromHtml("#181c20");
-                                b.ForeColor = Color.White;
-                            }
-                        }
-                        btnTime.BackColor = ColorTranslator.FromHtml("#ffb961");
-                        btnTime.ForeColor = ColorTranslator.FromHtml("#101418");
-                        _selectedShowtimeId = st.ShowtimeId;
+                    bool isPast = st.StartTime <= DateTime.Now;
+                    bool isSoldOut = st.AvailableSeats == 0;
+                    bool isDisabled = isPast || isSoldOut;
 
-                        string roomLabel = st.Room?.RoomName ?? $"Phòng Chiếu {st.RoomId}";
-                        lblSelectedShowtimeSummary.Text = $"SUẤT CHIẾU ĐANG CHỌN: {roomLabel} • {st.StartTime:HH:mm}";
-                        btnContinue.Enabled = true;
-                        btnContinue.BackColor = ColorTranslator.FromHtml("#ffb961");
+                    string statusText = isPast
+                        ? $"{st.StartTime:HH:mm}\n(Đã chiếu)"
+                        : isSoldOut
+                            ? $"{st.StartTime:HH:mm}\n(Hết ghế)"
+                            : $"{st.StartTime:HH:mm}\nCòn {st.AvailableSeats}/{st.TotalSeats} ghế";
+
+                    Button btnTime = new Button
+                    {
+                        Text = statusText,
+                        Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                        ForeColor = isDisabled ? ColorTranslator.FromHtml("#64748B") : Color.White,
+                        BackColor = isDisabled ? ColorTranslator.FromHtml("#0F172A") : ColorTranslator.FromHtml("#181c20"),
+                        Size = new Size(160, 90),
+                        Margin = new Padding(0, 0, 20, 20),
+                        FlatStyle = FlatStyle.Flat,
+                        Enabled = !isDisabled,
+                        Cursor = isDisabled ? Cursors.No : Cursors.Hand,
+                        Tag = st.ShowtimeId
                     };
+                    btnTime.FlatAppearance.BorderColor = isDisabled ? ColorTranslator.FromHtml("#1E293B") : ColorTranslator.FromHtml("#40484f");
+
+                    if (!isDisabled)
+                    {
+                        var selected = st;
+                        btnTime.Click += (_, _) =>
+                        {
+                            foreach (Control ctrl in pnlShowtimes.Controls)
+                            {
+                                if (ctrl is Button b && b.Enabled)
+                                {
+                                    b.BackColor = ColorTranslator.FromHtml("#181c20");
+                                    b.ForeColor = Color.White;
+                                }
+                            }
+                            btnTime.BackColor = ColorTranslator.FromHtml("#ffb961");
+                            btnTime.ForeColor = ColorTranslator.FromHtml("#101418");
+                            _selectedShowtimeId = selected.ShowtimeId;
+
+                            lblSelectedShowtimeSummary.Text = $"SUẤT CHIẾU ĐANG CHỌN: {selected.RoomName} • {selected.StartTime:HH:mm} • {selected.Price:N0} đ/ghế thường";
+                            btnContinue.Enabled = true;
+                            btnContinue.BackColor = ColorTranslator.FromHtml("#ffb961");
+                        };
+                    }
+
+                    pnlShowtimes.Controls.Add(btnTime);
+                    lastButton = btnTime;
                 }
 
-                pnlShowtimes.Controls.Add(btnTime);
+                if (lastButton != null) pnlShowtimes.SetFlowBreak(lastButton, true);
             }
         }
     }

@@ -24,13 +24,10 @@
             this.lnkPos = new System.Windows.Forms.LinkLabel();
             this.lblLogo = new System.Windows.Forms.Label();
             this.pnlHeader = new System.Windows.Forms.Panel();
-            this.btnHelp = new System.Windows.Forms.Button();
-            this.btnRefresh = new System.Windows.Forms.Button();
             this.lblShift = new System.Windows.Forms.Label();
             this.lblBreadcrumb = new System.Windows.Forms.Label();
             this.pnlFilterBar = new System.Windows.Forms.Panel();
             this.btnExportExcel = new System.Windows.Forms.Button();
-            this.btnQuery = new System.Windows.Forms.Button();
             this.btnMonthThis = new System.Windows.Forms.Button();
             this.pnlKpiContainer = new System.Windows.Forms.FlowLayoutPanel();
             this.pnlChartContainer = new System.Windows.Forms.Panel();
@@ -41,7 +38,7 @@
             this.dgvReports = new System.Windows.Forms.DataGridView();
             this.ColSTT = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.ColName = new System.Windows.Forms.DataGridViewTextBoxColumn();
-            this.ColCategory = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.ColTicketRevenue = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.ColShows = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.ColTotalSold = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.ColOccupancy = new System.Windows.Forms.DataGridViewTextBoxColumn();
@@ -78,7 +75,7 @@
             this.lblUser.Name = "lblUser";
             this.lblUser.Size = new System.Drawing.Size(107, 34);
             this.lblUser.TabIndex = 7;
-            this.lblUser.Text = "Julian Vance\r\nQuản Lý Trưởng";
+            this.lblUser.Text = "Người dùng\r\nVai trò";
 
             this.lnkOccupancy.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(125)))), ((int)(((byte)(211)))), ((int)(((byte)(252)))));
             this.lnkOccupancy.AutoSize = true;
@@ -145,8 +142,6 @@
             this.lblLogo.Text = "CINELUXE";
 
             this.pnlHeader.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
-            this.pnlHeader.Controls.Add(this.btnHelp);
-            this.pnlHeader.Controls.Add(this.btnRefresh);
             this.pnlHeader.Controls.Add(this.lblShift);
             this.pnlHeader.Controls.Add(this.lblBreadcrumb);
             this.pnlHeader.Location = new System.Drawing.Point(220, 0);
@@ -154,27 +149,7 @@
             this.pnlHeader.Size = new System.Drawing.Size(1220, 48);
             this.pnlHeader.TabIndex = 1;
 
-            this.btnHelp.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(24)))), ((int)(((byte)(28)))), ((int)(((byte)(32)))));
-            this.btnHelp.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnHelp.Font = new System.Drawing.Font("Segoe UI", 8.5F, System.Drawing.FontStyle.Bold);
-            this.btnHelp.ForeColor = System.Drawing.Color.White;
-            this.btnHelp.Location = new System.Drawing.Point(1030, 10);
-            this.btnHelp.Name = "btnHelp";
-            this.btnHelp.Size = new System.Drawing.Size(80, 28);
-            this.btnHelp.TabIndex = 3;
-            this.btnHelp.Text = "Help";
-            this.btnHelp.UseVisualStyleBackColor = false;
 
-            this.btnRefresh.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(24)))), ((int)(((byte)(28)))), ((int)(((byte)(32)))));
-            this.btnRefresh.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnRefresh.Font = new System.Drawing.Font("Segoe UI", 8.5F, System.Drawing.FontStyle.Bold);
-            this.btnRefresh.ForeColor = System.Drawing.Color.White;
-            this.btnRefresh.Location = new System.Drawing.Point(940, 10);
-            this.btnRefresh.Name = "btnRefresh";
-            this.btnRefresh.Size = new System.Drawing.Size(80, 28);
-            this.btnRefresh.TabIndex = 2;
-            this.btnRefresh.Text = "Refresh";
-            this.btnRefresh.UseVisualStyleBackColor = false;
 
             this.lblShift.AutoSize = true;
             this.lblShift.Font = new System.Drawing.Font("Segoe UI", 8.5F, System.Drawing.FontStyle.Bold);
@@ -196,7 +171,6 @@
 
             this.pnlFilterBar.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(24)))), ((int)(((byte)(28)))), ((int)(((byte)(32)))));
             this.pnlFilterBar.Controls.Add(this.btnExportExcel);
-            this.pnlFilterBar.Controls.Add(this.btnQuery);
             this.pnlFilterBar.Controls.Add(this.btnMonthThis);
             this.pnlFilterBar.Location = new System.Drawing.Point(240, 60);
             this.pnlFilterBar.Name = "pnlFilterBar";
@@ -214,16 +188,6 @@
             this.btnExportExcel.Text = "Xuất Excel";
             this.btnExportExcel.UseVisualStyleBackColor = false;
 
-            this.btnQuery.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(2)))), ((int)(((byte)(132)))), ((int)(((byte)(199)))));
-            this.btnQuery.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnQuery.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            this.btnQuery.ForeColor = System.Drawing.Color.White;
-            this.btnQuery.Location = new System.Drawing.Point(900, 15);
-            this.btnQuery.Name = "btnQuery";
-            this.btnQuery.Size = new System.Drawing.Size(120, 35);
-            this.btnQuery.TabIndex = 1;
-            this.btnQuery.Text = "Truy Vấn (F5)";
-            this.btnQuery.UseVisualStyleBackColor = false;
 
             this.btnMonthThis.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(2)))), ((int)(((byte)(132)))), ((int)(((byte)(199)))));
             this.btnMonthThis.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -264,7 +228,7 @@
             this.lblDonutTitle.Name = "lblDonutTitle";
             this.lblDonutTitle.Size = new System.Drawing.Size(209, 15);
             this.lblDonutTitle.TabIndex = 0;
-            this.lblDonutTitle.Text = "TỶ TRỌNG KÊNH BÁN TOUCHPOINT";
+            this.lblDonutTitle.Text = "TỶ TRỌNG GIAO DỊCH THEO KÊNH BÁN";
 
             this.pnlBarChart.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(24)))), ((int)(((byte)(28)))), ((int)(((byte)(32)))));
             this.pnlBarChart.Controls.Add(this.lblBarTitle);
@@ -280,7 +244,7 @@
             this.lblBarTitle.Name = "lblBarTitle";
             this.lblBarTitle.Size = new System.Drawing.Size(262, 15);
             this.lblBarTitle.TabIndex = 0;
-            this.lblBarTitle.Text = "XU HƯỚNG DOANH THU NGÀY TRONG THÁNG";
+            this.lblBarTitle.Text = "DOANH THU THEO PHIM (TOP 8)";
 
             this.dgvReports.AllowUserToAddRows = false;
             this.dgvReports.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
@@ -289,7 +253,7 @@
             this.dgvReports.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
             this.ColSTT,
             this.ColName,
-            this.ColCategory,
+            this.ColTicketRevenue,
             this.ColShows,
             this.ColTotalSold,
             this.ColOccupancy,
@@ -305,13 +269,13 @@
             this.ColSTT.HeaderText = "#";
             this.ColSTT.Name = "ColSTT";
 
-            this.ColName.HeaderText = "TÊN PHIM / COMBO BẮP NƯỚC";
+            this.ColName.HeaderText = "TÊN PHIM";
             this.ColName.Name = "ColName";
 
-            this.ColCategory.HeaderText = "PHÂN LOẠI";
-            this.ColCategory.Name = "ColCategory";
+            this.ColTicketRevenue.HeaderText = "DOANH THU VÉ";
+            this.ColTicketRevenue.Name = "ColTicketRevenue";
 
-            this.ColShows.HeaderText = "SUẤT CHIẾU / THÔNG TIN";
+            this.ColShows.HeaderText = "SỐ SUẤT";
             this.ColShows.Name = "ColShows";
 
             this.ColTotalSold.HeaderText = "TỔNG VÉ";
@@ -320,10 +284,10 @@
             this.ColOccupancy.HeaderText = "LẤP ĐẦY TB";
             this.ColOccupancy.Name = "ColOccupancy";
 
-            this.ColRevenue.HeaderText = "DOANH THU (VND)";
+            this.ColRevenue.HeaderText = "TỔNG DOANH THU (VÉ + COMBO)";
             this.ColRevenue.Name = "ColRevenue";
 
-            this.ColRatio.HeaderText = "THỜI GIAN GIAO DỊCH";
+            this.ColRatio.HeaderText = "TỶ TRỌNG";
             this.ColRatio.Name = "ColRatio";
 
             this.lblFooterStatus.AutoSize = true;
@@ -377,11 +341,8 @@
         public System.Windows.Forms.Panel pnlHeader;
         public System.Windows.Forms.Label lblBreadcrumb;
         public System.Windows.Forms.Label lblShift;
-        public System.Windows.Forms.Button btnRefresh;
-        public System.Windows.Forms.Button btnHelp;
         public System.Windows.Forms.Panel pnlFilterBar;
         public System.Windows.Forms.Button btnMonthThis;
-        public System.Windows.Forms.Button btnQuery;
         public System.Windows.Forms.Button btnExportExcel;
         public System.Windows.Forms.FlowLayoutPanel pnlKpiContainer;
         public System.Windows.Forms.Panel pnlChartContainer;
@@ -392,7 +353,7 @@
         public System.Windows.Forms.DataGridView dgvReports;
         public System.Windows.Forms.DataGridViewTextBoxColumn ColSTT;
         public System.Windows.Forms.DataGridViewTextBoxColumn ColName;
-        public System.Windows.Forms.DataGridViewTextBoxColumn ColCategory;
+        public System.Windows.Forms.DataGridViewTextBoxColumn ColTicketRevenue;
         public System.Windows.Forms.DataGridViewTextBoxColumn ColShows;
         public System.Windows.Forms.DataGridViewTextBoxColumn ColTotalSold;
         public System.Windows.Forms.DataGridViewTextBoxColumn ColOccupancy;

@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
-using CinemaManagement.Data;
+﻿using CinemaManagement.Helpers;
 using CinemaManagement.Models;
+using CinemaManagement.Services;
 
 namespace CinemaManagement.Forms.Admin
 {
@@ -17,18 +13,26 @@ namespace CinemaManagement.Forms.Admin
         private static readonly Color Accent = ColorTranslator.FromHtml("#0284C7");
         private static readonly Color TextDim = ColorTranslator.FromHtml("#94A3B8");
 
+        private readonly RoomService _roomService = new();
+        private readonly ErrorProvider _errors = new();
+
         private DataGridView dgvRooms = null!;
         private TextBox txtRoomName = null!;
         private ComboBox cboRoomType = null!;
         private NumericUpDown numRows = null!;
         private NumericUpDown numSeatsPerRow = null!;
+        private NumericUpDown numVipRows = null!;
+        private CheckBox chkCoupleRow = null!;
         private Button btnAddRoom = null!;
+        private Button btnDeleteRoom = null!;
 
         public FrmAdminRooms()
         {
             InitializeComponent();
+            AppSession.RequireAdmin(this);
             SetupCustomUI();
             LoadRooms();
+            WindowLayout.ApplyStandardSize(this);
         }
 
         private void SetupCustomUI()
@@ -53,19 +57,24 @@ namespace CinemaManagement.Forms.Admin
 
             Label lblType = new Label { Text = "Loại phòng:", Location = new Point(220, 20), AutoSize = true, ForeColor = TextDim };
             cboRoomType = new ComboBox { Location = new Point(220, 45), Width = 160, DropDownStyle = ComboBoxStyle.DropDownList, BackColor = BgSurface, ForeColor = Color.White };
-            cboRoomType.Items.AddRange(new object[] { "Standard 2D", "IMAX Laser", "VIP Suite", "4DX" });
+            cboRoomType.Items.AddRange(RoomTypes.All);
             cboRoomType.SelectedIndex = 0;
 
-            Label lblRows = new Label { Text = "Số hàng ghế (A-Z):", Location = new Point(400, 20), AutoSize = true, ForeColor = TextDim };
-            numRows = new NumericUpDown { Location = new Point(400, 45), Width = 120, Minimum = 1, Maximum = 15, Value = 5, BackColor = BgSurface, ForeColor = Color.White };
+            Label lblRows = new Label { Text = "Số hàng (A-Z):", Location = new Point(400, 20), AutoSize = true, ForeColor = TextDim };
+            numRows = new NumericUpDown { Location = new Point(400, 45), Width = 90, Minimum = 1, Maximum = RoomService.MaxRows, Value = 8, BackColor = BgSurface, ForeColor = Color.White };
 
-            Label lblSeatsPerRow = new Label { Text = "Số ghế / Hàng:", Location = new Point(540, 20), AutoSize = true, ForeColor = TextDim };
-            numSeatsPerRow = new NumericUpDown { Location = new Point(540, 45), Width = 120, Minimum = 1, Maximum = 20, Value = 10, BackColor = BgSurface, ForeColor = Color.White };
+            Label lblSeatsPerRow = new Label { Text = "Ghế / hàng:", Location = new Point(505, 20), AutoSize = true, ForeColor = TextDim };
+            numSeatsPerRow = new NumericUpDown { Location = new Point(505, 45), Width = 90, Minimum = 1, Maximum = RoomService.MaxCols, Value = 10, BackColor = BgSurface, ForeColor = Color.White };
+
+            Label lblVip = new Label { Text = "Số hàng VIP:", Location = new Point(610, 20), AutoSize = true, ForeColor = TextDim };
+            numVipRows = new NumericUpDown { Location = new Point(610, 45), Width = 90, Minimum = 0, Maximum = RoomService.MaxRows, Value = 2, BackColor = BgSurface, ForeColor = Color.White };
+
+            chkCoupleRow = new CheckBox { Text = "Hàng cuối là ghế Đôi", Location = new Point(400, 80), AutoSize = true, ForeColor = Color.White, Checked = true };
 
             btnAddRoom = new Button
             {
                 Text = "+ Tạo Phòng & Sinh Ghế",
-                Location = new Point(680, 42),
+                Location = new Point(720, 42),
                 Size = new Size(180, 32),
                 BackColor = Accent,
                 ForeColor = Color.White,
@@ -76,7 +85,21 @@ namespace CinemaManagement.Forms.Admin
             btnAddRoom.FlatAppearance.BorderSize = 0;
             btnAddRoom.Click += (s, e) => AddRoomAndGenerateSeats();
 
-            pnlInput.Controls.AddRange(new Control[] { lblName, txtRoomName, lblType, cboRoomType, lblRows, numRows, lblSeatsPerRow, numSeatsPerRow, btnAddRoom });
+            btnDeleteRoom = new Button
+            {
+                Text = "🗑 Xóa phòng",
+                Location = new Point(910, 42),
+                Size = new Size(130, 32),
+                BackColor = ColorTranslator.FromHtml("#EF4444"),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 9.5F, FontStyle.Bold)
+            };
+            btnDeleteRoom.FlatAppearance.BorderSize = 0;
+            btnDeleteRoom.Click += (s, e) => DeleteSelectedRoom();
+
+            pnlInput.Controls.AddRange(new Control[] { lblName, txtRoomName, lblType, cboRoomType, lblRows, numRows, lblSeatsPerRow, numSeatsPerRow, lblVip, numVipRows, chkCoupleRow, btnAddRoom, btnDeleteRoom });
 
             dgvRooms = new DataGridView
             {
@@ -105,26 +128,21 @@ namespace CinemaManagement.Forms.Admin
         {
             try
             {
-                using var db = new CinemaDbContext();
-                var list = db.Rooms.Select(r => new
-                {
-                    r.RoomId,
-                    r.RoomName,
-                    r.RoomType,
-                    r.RowCount,
-                    r.ColCount,
-                    r.TotalSeats,
-                    SeatsInDb = db.Seats.Count(s => s.RoomId == r.RoomId)
-                }).ToList();
+                dgvRooms.DataSource = _roomService.GetSummaries();
 
-                dgvRooms.DataSource = list;
-                if (dgvRooms.Columns["RoomId"] != null) dgvRooms.Columns["RoomId"].HeaderText = "MÃ PHÒNG";
-                if (dgvRooms.Columns["RoomName"] != null) dgvRooms.Columns["RoomName"].HeaderText = "TÊN PHÒNG CHIẾU";
-                if (dgvRooms.Columns["RoomType"] != null) dgvRooms.Columns["RoomType"].HeaderText = "LOẠI PHÒNG";
-                if (dgvRooms.Columns["RowCount"] != null) dgvRooms.Columns["RowCount"].HeaderText = "SỐ HÀNG";
-                if (dgvRooms.Columns["ColCount"] != null) dgvRooms.Columns["ColCount"].HeaderText = "SỐ CỘT";
-                if (dgvRooms.Columns["TotalSeats"] != null) dgvRooms.Columns["TotalSeats"].HeaderText = "TỔNG SỐ GHẾ LÝ THUYẾT";
-                if (dgvRooms.Columns["SeatsInDb"] != null) dgvRooms.Columns["SeatsInDb"].HeaderText = "SỐ GHẾ THỰC TẾ TRONG DB";
+                void Header(string col, string text)
+                {
+                    if (dgvRooms.Columns[col] != null) dgvRooms.Columns[col]!.HeaderText = text;
+                }
+                Header(nameof(RoomSummaryDto.RoomId), "MÃ PHÒNG");
+                Header(nameof(RoomSummaryDto.RoomName), "TÊN PHÒNG CHIẾU");
+                Header(nameof(RoomSummaryDto.RoomType), "LOẠI PHÒNG");
+                Header(nameof(RoomSummaryDto.RowCount), "SỐ HÀNG");
+                Header(nameof(RoomSummaryDto.ColCount), "SỐ CỘT");
+                Header(nameof(RoomSummaryDto.StandardSeats), "GHẾ THƯỜNG");
+                Header(nameof(RoomSummaryDto.VipSeats), "GHẾ VIP");
+                Header(nameof(RoomSummaryDto.CoupleSeats), "GHẾ ĐÔI");
+                Header(nameof(RoomSummaryDto.TotalSeats), "TỔNG SỐ GHẾ");
             }
             catch (Exception ex)
             {
@@ -134,39 +152,45 @@ namespace CinemaManagement.Forms.Admin
 
         private void AddRoomAndGenerateSeats()
         {
+            _errors.Clear();
             string roomName = txtRoomName.Text.Trim();
             if (string.IsNullOrWhiteSpace(roomName))
             {
-                MessageBox.Show("Vui lòng nhập tên phòng chiếu!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _errors.SetError(txtRoomName, "Vui lòng nhập tên phòng chiếu!");
+                txtRoomName.Focus();
                 return;
             }
 
-            int rowsCount = (int)numRows.Value;
-            int seatsPerRow = (int)numSeatsPerRow.Value;
-            int totalSeats = rowsCount * seatsPerRow;
-            string roomType = cboRoomType.SelectedItem?.ToString() ?? "Standard 2D";
+            int rows = (int)numRows.Value;
+            int cols = (int)numSeatsPerRow.Value;
+            int vipRows = (int)numVipRows.Value;
+            bool coupleRow = chkCoupleRow.Checked;
+
+            if (vipRows > rows)
+            {
+                _errors.SetError(numVipRows, "Số hàng VIP không được lớn hơn số hàng ghế");
+                return;
+            }
+            if (coupleRow && cols < 2)
+            {
+                _errors.SetError(chkCoupleRow, "Hàng ghế đôi cần ít nhất 2 ghế mỗi hàng");
+                return;
+            }
 
             try
             {
-                using var db = new CinemaDbContext();
-                var room = new Room
-                {
-                    RoomName = roomName,
-                    RoomType = roomType,
-                    RowCount = rowsCount,
-                    ColCount = seatsPerRow,
-                    TotalSeats = totalSeats
-                };
-                db.Rooms.Add(room);
-                db.SaveChanges(); 
+                var room = _roomService.CreateRoom(roomName, cboRoomType.SelectedItem?.ToString() ?? RoomTypes.Standard, rows, cols, vipRows, coupleRow);
+                int seatCount = _roomService.GetSummaries().FirstOrDefault(r => r.RoomId == room.RoomId)?.TotalSeats ?? 0;
 
-                GenerateSeatsForRoom(db, room.RoomId, rowsCount, seatsPerRow);
-
-                MessageBox.Show($"Đã khởi tạo phòng '{roomName}' và sinh tự động {totalSeats} ghế thành công vào CSDL!", 
+                MessageBox.Show($"Đã tạo phòng '{roomName}' và tự động sinh {seatCount} ghế!",
                     "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
                 txtRoomName.Clear();
                 LoadRooms();
+            }
+            catch (BusinessException ex)
+            {
+                MessageBox.Show(ex.Message, "Dữ liệu không hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             catch (Exception ex)
             {
@@ -174,33 +198,31 @@ namespace CinemaManagement.Forms.Admin
             }
         }
 
-        private void GenerateSeatsForRoom(CinemaDbContext db, int roomId, int rowsCount, int seatsPerRow)
+        private void DeleteSelectedRoom()
         {
-            string[] rowLetters = { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O" };
-            var seatList = new List<Seat>();
-
-            for (int r = 0; r < rowsCount && r < rowLetters.Length; r++)
+            if (dgvRooms.CurrentRow?.DataBoundItem is not RoomSummaryDto room)
             {
-                string rowLetter = rowLetters[r];
-                bool isVipRow = (r >= rowsCount - 2 && rowsCount > 2);
-                string seatType = isVipRow ? "VIP" : "Standard";
-                decimal basePrice = isVipRow ? 140000m : 110000m;
-
-                for (int s = 1; s <= seatsPerRow; s++)
-                {
-                    seatList.Add(new Seat
-                    {
-                        RoomId = roomId,
-                        SeatNumber = $"{rowLetter}{s}",
-                        SeatType = seatType,
-                        Price = basePrice,
-                        IsAvailable = true
-                    });
-                }
+                MessageBox.Show("Vui lòng chọn phòng cần xóa.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
             }
 
-            db.Seats.AddRange(seatList);
-            db.SaveChanges();
+            if (MessageBox.Show($"Xóa phòng '{room.RoomName}' cùng toàn bộ {room.TotalSeats} ghế?", "Xác nhận",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            try
+            {
+                _roomService.DeleteRoom(room.RoomId);
+                LoadRooms();
+            }
+            catch (BusinessException ex)
+            {
+                MessageBox.Show(ex.Message, "Không thể xóa", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi xóa phòng: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
     }
 }

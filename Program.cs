@@ -1,5 +1,3 @@
-using System;
-using System.Windows.Forms;
 using CinemaManagement.Data;
 using CinemaManagement.Forms.Admin;
 
@@ -11,10 +9,17 @@ namespace CinemaManagement
         static void Main()
         {
             ApplicationConfiguration.Initialize();
-            
-            using (var context = new CinemaDbContext())
+
+            try
             {
-                DbInitializer.Initialize(context);
+                DbInitializer.Initialize();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Không khởi tạo được cơ sở dữ liệu cinema.db:\n" + ex.Message,
+                    "Lỗi khởi động", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
 
             Application.Run(new FrmRoleSelection());

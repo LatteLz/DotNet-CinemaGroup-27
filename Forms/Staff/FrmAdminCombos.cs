@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data.SQLite;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Globalization;
-using System.IO;
-using System.Windows.Forms;
-using CinemaManagement.Forms.Staff;
+﻿using System.Drawing.Drawing2D;
+using CinemaManagement.Forms.Shared;
+using CinemaManagement.Helpers;
+using CinemaManagement.Models;
+using CinemaManagement.Services;
+using static CinemaManagement.Helpers.UiHelper;
 
 namespace CinemaManagement.Forms.Staff
 {
@@ -24,17 +21,20 @@ namespace CinemaManagement.Forms.Staff
         private readonly Font FontInterSmall = new Font("Segoe UI", 8F, FontStyle.Regular);
         private readonly Font FontMono = new Font("Consolas", 8.5F, FontStyle.Regular);
 
-        private string connectionString = "Data Source=cinema.db;Version=3;";
+        private readonly ComboService _comboService = new();
+        private List<ComboItem> _combos = new();
         private string placeholderText = "🔍 Tìm kiếm SKU, tên combo...";
         private ErrorProvider errorProvider = new ErrorProvider();
 
         public FrmAdminCombos()
         {
             InitializeComponent();
+            AppSession.RequireAdmin(this);
             SetupCustomUI();
             SetupButtonEvents();
             SetupSidebarEvents();
             LoadDataFromDb();
+            WindowLayout.ScaleToStandard(this);
         }
 
         private void SetupCustomUI()
@@ -70,6 +70,8 @@ namespace CinemaManagement.Forms.Staff
                     }
                 };
 
+                txtSearch.TextChanged += (s, e) => RenderGrid();
+
                 txtSearch.Leave += (s, e) => {
                     if (string.IsNullOrWhiteSpace(txtSearch.Text))
                     {
@@ -93,58 +95,22 @@ namespace CinemaManagement.Forms.Staff
 
         private void SetupSidebarEvents()
         {
-            if (lnkPos != null)
-            {
-                lnkPos.LinkClicked += (s, e) => {
-                    FrmStaffPOS posForm = new FrmStaffPOS(1, "Thu ngân mặc định");
-                    posForm.Show();
-                    this.Hide();
-                };
-            }
-
-            if (lnkUsers != null)
-            {
-                lnkUsers.LinkClicked += (s, e) => {
-                    FrmAdminUsers usersForm = new FrmAdminUsers();
-                    usersForm.Show();
-                    this.Hide();
-                };
-            }
-
-            if (lnkReports != null)
-            {
-                lnkReports.LinkClicked += (s, e) => {
-                    FrmAdminReports reportsForm = new FrmAdminReports();
-                    reportsForm.Show();
-                    this.Hide();
-                };
-            }
-
-            if (lnkCombo != null)
-            {
-                lnkCombo.LinkClicked += (s, e) => {
-                };
-            }
-
-            if (lnkOccupancy != null)
-            {
-                lnkOccupancy.LinkClicked += (s, e) => {
-                    FrmOccupancyReport occupancyForm = new FrmOccupancyReport();
-                    occupancyForm.Show();
-                    this.Hide();
-                };
-            }
+            if (lnkPos != null) lnkPos.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmStaffPOS>(this);
+            if (lnkUsers != null) lnkUsers.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmAdminUsers>(this);
+            if (lnkReports != null) lnkReports.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmAdminReports>(this);
+            if (lnkOccupancy != null) lnkOccupancy.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmOccupancyReport>(this);
         }
 
         private void SetupButtonEvents()
         {
             if (btnAddComboTop != null) btnAddComboTop.Click += BtnAddComboTop_Click;
-            if (btnUpdatePrice != null) btnUpdatePrice.Click += BtnUpdatePrice_Click;
-            if (btnImportStore != null) btnImportStore.Click += BtnImportStore_Click;
+            if (btnEditCombo != null) btnEditCombo.Click += BtnEditCombo_Click;
+            if (btnDeleteCombo != null) btnDeleteCombo.Click += BtnDeleteCombo_Click;
+            if (dgvCombos != null) dgvCombos.CellDoubleClick += (s, e) => { if (e.RowIndex >= 0) BtnEditCombo_Click(s!, e); };
             if (btnExportExcel != null) btnExportExcel.Click += BtnExportExcel_Click;
         }
 
-        private bool ShowAddComboDialog(out string comboName, out decimal price, out string description)
+        private bool ShowAddComboDialog(out string comboName, out decimal price, out string description, ComboItem? initial = null)
         {
             comboName = "";
             price = 0m;
@@ -152,7 +118,7 @@ namespace CinemaManagement.Forms.Staff
 
             using (Form dlg = new Form())
             {
-                dlg.Text = "Thêm Combo Bắp Nước Mới";
+                dlg.Text = initial == null ? "Thêm Combo Bắp Nước Mới" : $"Sửa Combo #{initial.ComboId}";
                 dlg.Size = new Size(420, 260);
                 dlg.StartPosition = FormStartPosition.CenterParent;
                 dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -176,7 +142,7 @@ namespace CinemaManagement.Forms.Staff
                     BackColor = ColorBg,
                     ForeColor = ColorTextWhite,
                     BorderStyle = BorderStyle.FixedSingle,
-                    Text = "Combo Bắp Nước Mới"
+                    Text = initial?.ComboName ?? ""
                 };
 
                 Label lblPrice = new Label
@@ -194,7 +160,7 @@ namespace CinemaManagement.Forms.Staff
                     BackColor = ColorBg,
                     ForeColor = ColorTextWhite,
                     BorderStyle = BorderStyle.FixedSingle,
-                    Text = "99000"
+                    Text = initial != null ? initial.Price.ToString("0") : ""
                 };
 
                 Label lblDesc = new Label
@@ -212,7 +178,7 @@ namespace CinemaManagement.Forms.Staff
                     BackColor = ColorBg,
                     ForeColor = ColorTextWhite,
                     BorderStyle = BorderStyle.FixedSingle,
-                    Text = "1 Bắp ngọt + 1 Nước"
+                    Text = initial?.Description ?? ""
                 };
 
                 Button btnOk = new Button
@@ -243,6 +209,7 @@ namespace CinemaManagement.Forms.Staff
                 dlg.AcceptButton = btnOk;
                 dlg.CancelButton = btnCancel;
 
+                using var dlgErrors = new ErrorProvider { ContainerControl = dlg, BlinkStyle = ErrorBlinkStyle.NeverBlink };
                 while (true)
                 {
                     if (dlg.ShowDialog(this) != DialogResult.OK)
@@ -250,20 +217,20 @@ namespace CinemaManagement.Forms.Staff
                         return false;
                     }
 
+                    dlgErrors.Clear();
                     string inputName = txtName.Text.Trim();
-                    string rawPrice = txtPrice.Text.Replace("đ", "").Replace("VNĐ", "").Replace(".", "").Replace(",", "").Trim();
-                    string inputDesc = string.IsNullOrWhiteSpace(txtDesc.Text) ? "Bắp nước tiêu chuẩn" : txtDesc.Text.Trim();
+                    string inputDesc = txtDesc.Text.Trim();
 
                     if (string.IsNullOrWhiteSpace(inputName))
                     {
-                        MessageBox.Show("Tên combo bắp nước không được để trống!", "Lỗi Dữ Liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        dlgErrors.SetError(txtName, "Tên combo bắp nước không được để trống");
                         txtName.Focus();
                         continue;
                     }
 
-                    if (!decimal.TryParse(rawPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal parsedPrice) || parsedPrice <= 0)
+                    if (!ValidationHelper.IsPositiveMoney(txtPrice.Text, out decimal parsedPrice))
                     {
-                        MessageBox.Show("Giá niêm yết phải là số lớn hơn 0!", "Lỗi Dữ Liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        dlgErrors.SetError(txtPrice, "Giá niêm yết phải là số lớn hơn 0");
                         txtPrice.Focus();
                         continue;
                     }
@@ -279,64 +246,18 @@ namespace CinemaManagement.Forms.Staff
         private void BtnAddComboTop_Click(object sender, EventArgs e)
         {
             if (!ShowAddComboDialog(out string name, out decimal price, out string description))
-            {
                 return;
-            }
 
             errorProvider.SetError(btnAddComboTop, string.Empty);
-
             try
             {
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
-                {
-                    conn.Open();
-
-                    using (var createCmd = new SQLiteCommand(@"
-                        CREATE TABLE IF NOT EXISTS ComboItems (
-                            ComboId INTEGER PRIMARY KEY AUTOINCREMENT,
-                            ComboName TEXT NOT NULL,
-                            Price NUMERIC NOT NULL DEFAULT 0,
-                            ImagePath TEXT
-                        );", conn))
-                    {
-                        createCmd.ExecuteNonQuery();
-                    }
-
-                    var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    using (var pragmaCmd = new SQLiteCommand("PRAGMA table_info(ComboItems);", conn))
-                    using (var reader = pragmaCmd.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            string? colName = reader["name"]?.ToString();
-                            if (!string.IsNullOrWhiteSpace(colName))
-                            {
-                                cols.Add(colName);
-                            }
-                        }
-                    }
-
-                    string nameCol = cols.Contains("ComboName") ? "ComboName" : (cols.Contains("Name") ? "Name" : "ComboName");
-                    string descCol = cols.Contains("ImagePath") ? "ImagePath" : (cols.Contains("Description") ? "Description" : "");
-
-                    string query = !string.IsNullOrEmpty(descCol)
-                        ? $"INSERT INTO ComboItems ({nameCol}, Price, {descCol}) VALUES (@name, @price, @desc);"
-                        : $"INSERT INTO ComboItems ({nameCol}, Price) VALUES (@name, @price);";
-
-                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@name", name);
-                        cmd.Parameters.AddWithValue("@price", price);
-                        if (!string.IsNullOrEmpty(descCol))
-                        {
-                            cmd.Parameters.AddWithValue("@desc", description);
-                        }
-                        cmd.ExecuteNonQuery();
-                    }
-                }
-
+                _comboService.AddCombo(new ComboItem { ComboName = name, Price = price, Description = description });
                 LoadDataFromDb();
-                MessageBox.Show("Đã thêm combo bắp nước và lưu vào CSDL thành công!", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Đã thêm combo bắp nước thành công!", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (BusinessException ex)
+            {
+                MessageBox.Show(ex.Message, "Dữ liệu không hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             catch (Exception ex)
             {
@@ -344,144 +265,150 @@ namespace CinemaManagement.Forms.Staff
             }
         }
 
-        private void BtnUpdatePrice_Click(object sender, EventArgs e)
+        private ComboItem? GetSelectedCombo()
         {
-            if (dgvCombos.SelectedRows.Count > 0)
+            if (dgvCombos.SelectedRows.Count == 0 || dgvCombos.SelectedRows[0].Tag is not int comboId)
             {
-                string sku = dgvCombos.SelectedRows[0].Cells[0].Value?.ToString() ?? "";
-                errorProvider.Clear();
-                MessageBox.Show($"Mở giao diện cập nhật giá sỉ/lẻ cho mã mặt hàng: {sku}", "Cập Nhật Giá", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                errorProvider.SetError(btnEditCombo, "Chưa chọn dòng dữ liệu!");
+                MessageBox.Show("Vui lòng chọn một combo trên bảng.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
             }
-            else
+            errorProvider.Clear();
+            return _combos.FirstOrDefault(c => c.ComboId == comboId);
+        }
+
+        private void BtnEditCombo_Click(object sender, EventArgs e)
+        {
+            var combo = GetSelectedCombo();
+            if (combo == null) return;
+
+            if (!ShowAddComboDialog(out string name, out decimal price, out string description, combo))
+                return;
+
+            try
             {
-                errorProvider.SetError(btnUpdatePrice, "Chưa chọn dòng dữ liệu!");
-                MessageBox.Show("Vui lòng chọn một dòng sản phẩm trên bảng để cập nhật giá.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _comboService.UpdateCombo(new ComboItem
+                {
+                    ComboId = combo.ComboId,
+                    ComboName = name,
+                    Price = price,
+                    Description = description,
+                    ImagePath = combo.ImagePath,
+                    IsActive = true
+                });
+                LoadDataFromDb();
+                MessageBox.Show("Đã cập nhật combo.", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (BusinessException ex)
+            {
+                MessageBox.Show(ex.Message, "Dữ liệu không hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi khi cập nhật CSDL: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void BtnImportStore_Click(object sender, EventArgs e)
+        private void BtnDeleteCombo_Click(object sender, EventArgs e)
         {
-            MessageBox.Show("Mở phân hệ Nhập kho nguyên liệu / F&B vào hệ thống.", "Nhập Kho F&B", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var combo = GetSelectedCombo();
+            if (combo == null) return;
+
+            if (MessageBox.Show($"Xóa combo '{combo.ComboName}'?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
+
+            try
+            {
+                bool deleted = _comboService.DeleteCombo(combo.ComboId);
+                LoadDataFromDb();
+                MessageBox.Show(deleted
+                        ? "Đã xóa combo."
+                        : "Combo đã có trong hóa đơn nên được chuyển sang 'Ngừng bán' (không xóa để giữ số liệu doanh thu).",
+                    "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (BusinessException ex)
+            {
+                MessageBox.Show(ex.Message, "Không thể xóa", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi khi xóa combo: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void BtnExportExcel_Click(object sender, EventArgs e)
         {
-            using (SaveFileDialog sfd = new SaveFileDialog())
+            using var sfd = new SaveFileDialog
             {
-                sfd.Filter = "CSV File (*.csv)|*.csv|All Files (*.*)|*.*";
-                sfd.FileName = "Cineluxe_Combo_Inventory_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv";
-                if (sfd.ShowDialog() == DialogResult.OK)
-                {
-                    try
-                    {
-                        using (StreamWriter sw = new StreamWriter(sfd.FileName, false, System.Text.Encoding.UTF8))
-                        {
-                            sw.WriteLine("MA SKU,TEN MON / COMBO,PHAN LOAI,GIA VON,GIA NIEM YET,TON");
-                            foreach (DataGridViewRow row in dgvCombos.Rows)
-                            {
-                                if (row.IsNewRow) continue;
-                                string sku = row.Cells[0].Value?.ToString() ?? "";
-                                string nameDesc = row.Cells[2].Value?.ToString() ?? "";
-                                string cat = row.Cells[3].Value?.ToString().Split('|')[0] ?? "";
-                                string cost = row.Cells[4].Value?.ToString() ?? "";
-                                string retail = row.Cells[5].Value?.ToString() ?? "";
-                                string stock = row.Cells[6].Value?.ToString() ?? "";
+                Filter = "CSV File (*.csv)|*.csv|All Files (*.*)|*.*",
+                FileName = "Cineluxe_Combo_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv"
+            };
+            if (sfd.ShowDialog(this) != DialogResult.OK) return;
 
-                                sw.WriteLine($"\"{sku}\",\"{nameDesc}\",\"{cat}\",\"{cost}\",\"{retail}\",\"{stock}\"");
-                            }
-                        }
-                        MessageBox.Show("Đã xuất dữ liệu danh mục Combo & Kho F&B ra file thành công!\nĐường dẫn: " + sfd.FileName, "Xuất Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show("Lỗi khi xuất file: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("Mã combo,Tên combo,Mô tả,Trạng thái,Giá bán,File ảnh");
+                foreach (var c in _combos)
+                {
+                    sb.AppendLine(string.Join(",",
+                        Csv($"CB-{c.ComboId:D3}"), Csv(c.ComboName), Csv(c.Description), Csv(c.IsActive ? "Đang bán" : "Ngừng bán"),
+                        c.Price.ToString("0"), Csv(string.IsNullOrWhiteSpace(c.ImagePath) ? "" : System.IO.Path.GetFileName(c.ImagePath))));
                 }
+                System.IO.File.WriteAllText(sfd.FileName, sb.ToString(), new System.Text.UTF8Encoding(true));
+                MessageBox.Show("Đã xuất danh mục combo ra file:\n" + sfd.FileName, "Xuất Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+            {
+                MessageBox.Show("Lỗi khi xuất file: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void LoadDataFromDb()
         {
-            dgvCombos.Rows.Clear();
-            bool loaded = false;
-            int totalProducts = 0;
-            decimal totalInventoryValue = 0;
-
             try
             {
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
-                {
-                    conn.Open();
-
-                    var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    using (var pragmaCmd = new SQLiteCommand("PRAGMA table_info(ComboItems);", conn))
-                    using (var r = pragmaCmd.ExecuteReader())
-                    {
-                        while (r.Read())
-                        {
-                            string? cName = r["name"]?.ToString();
-                            if (!string.IsNullOrWhiteSpace(cName)) cols.Add(cName);
-                        }
-                    }
-
-                    string idCol = cols.Contains("ComboId") ? "ComboId" : (cols.Contains("Combold") ? "Combold" : (cols.Contains("Id") ? "Id" : "rowid"));
-                    string nameCol = cols.Contains("ComboName") ? "ComboName" : (cols.Contains("Name") ? "Name" : "''");
-                    string descCol = cols.Contains("ImagePath") ? "ImagePath" : (cols.Contains("Description") ? "Description" : "''");
-
-                    string query = $"SELECT {idCol} AS CId, {nameCol} AS CName, Price, {descCol} AS CDesc FROM ComboItems;";
-                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
-                    {
-                        using (SQLiteDataReader reader = cmd.ExecuteReader())
-                        {
-                            int idx = 1;
-                            while (reader.Read())
-                            {
-                                totalProducts++;
-                                string id = reader["CId"] != DBNull.Value && reader["CId"] != null ? reader["CId"].ToString()! : idx.ToString("D3");
-                                string name = reader["CName"]?.ToString() ?? $"Combo {idx}";
-                                decimal price = reader["Price"] != DBNull.Value && reader["Price"] != null
-                                    ? Convert.ToDecimal(reader["Price"], CultureInfo.InvariantCulture)
-                                    : 0m;
-                                string imagePath = reader["CDesc"]?.ToString() ?? "Bắp nước tiêu chuẩn";
-
-                                int stockQty = 30;
-                                totalInventoryValue += (price * 0.7m) * stockQty;
-
-                                AddComboRow($"SKU-CB-{id}", name, imagePath, "Combo tiết kiệm", "#0F2738", "#38BDF8", $"{price * 0.7m:N0} đ", $"{price:N0} đ", stockQty.ToString());
-                                loaded = true;
-                                idx++;
-                            }
-                        }
-                    }
-                }
+                _combos = _comboService.GetAllCombos();
             }
-            catch
+            catch (Exception ex)
             {
+                MessageBox.Show("Lỗi tải danh sách combo: " + ex.Message, "Lỗi CSDL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _combos = new List<ComboItem>();
             }
 
-            if (!loaded)
-            {
-                totalProducts = 3;
-                totalInventoryValue = (38000 * 30) + (24500 * 18) + (55000 * 25);
-                AddComboRow("SKU-CB-001", "Combo Solo (1 Bắp + 1 Nước)", "1 Bắp ngọt 85oz + 2 Pepsi 32oz", "Combo tiết kiệm", "#0F2738", "#38BDF8", "38.000 đ", "79.000 đ", "30");
-                AddComboRow("SKU-CB-002", "Combo Couple (1 Bắp + 2 Nước)", "1 Bắp mặn 64oz + 1 Coca 22oz", "Combo tiết kiệm", "#0F2738", "#38BDF8", "24.500 đ", "109.000 đ", "18");
-                AddComboRow("SKU-CB-003", "Combo Family Siêu To", "2 Bắp L + 3 Pepsi + 1 Snack", "Combo gia đình", "#0F2738", "#38BDF8", "55.000 đ", "179.000 đ", "25");
-            }
-
-            UpdateFooterStatus(totalProducts, totalInventoryValue);
+            RenderGrid();
         }
 
-        private void UpdateFooterStatus(int totalProducts, decimal totalValue)
+        private void RenderGrid()
         {
+            dgvCombos.Rows.Clear();
+
+            string keyword = txtSearch == null || txtSearch.Text == placeholderText ? "" : txtSearch.Text.Trim();
+            var list = _combos.Where(c => keyword.Length < 2
+                                          || c.ComboName.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                                          || $"CB-{c.ComboId:D3}".Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                              .ToList();
+
+            foreach (var c in list)
+            {
+                string status = c.IsActive ? "Đang bán" : "Ngừng bán";
+                string bg = c.IsActive ? "#0F2738" : "#3B1D1D";
+                string fg = c.IsActive ? "#38BDF8" : "#F87171";
+                int rowIndex = AddComboRow($"CB-{c.ComboId:D3}", c.ComboName, c.Description ?? "", status, bg, fg,
+                    string.IsNullOrWhiteSpace(c.ImagePath) ? "—" : System.IO.Path.GetFileName(c.ImagePath),
+                    $"{c.Price:N0} đ");
+                dgvCombos.Rows[rowIndex].Tag = c.ComboId;
+            }
+
             if (lblFooterStatus != null)
             {
-                lblFooterStatus.Text = $"🟢  Tổng mặt hàng: {totalProducts} sản phẩm FB  |  Giá trị tồn kho: {totalValue:N0} đ  |  SQLite WAL Mode: OK";
+                lblFooterStatus.Text = $"🟢  Tổng: {_combos.Count} combo  |  Đang bán: {_combos.Count(c => c.IsActive)}  |  Hiển thị: {list.Count}";
             }
         }
 
-        private void AddComboRow(string sku, string name, string desc, string category, string badgeBgHex, string badgeFgHex, string costPrice, string listPrice, string stock)
+        private int AddComboRow(string code, string name, string desc, string status, string badgeBgHex, string badgeFgHex, string imageFile, string price)
         {
-            dgvCombos.Rows.Add(sku, null, name + "|" + desc, category + "|" + badgeBgHex + "|" + badgeFgHex, costPrice, listPrice, stock);
+            return dgvCombos.Rows.Add(code, null, name + "|" + desc, status + "|" + badgeBgHex + "|" + badgeFgHex, imageFile, price);
         }
 
         private void DgvCombos_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
@@ -519,7 +446,7 @@ namespace CinemaManagement.Forms.Staff
                 Size textSize = TextRenderer.MeasureText(catName, FontInterSmall);
                 Rectangle badgeRect = new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + (e.CellBounds.Height - 24) / 2, textSize.Width + 16, 24);
 
-                using (GraphicsPath path = GetRoundedRect(badgeRect, 6))
+                using (GraphicsPath path = RoundedRect(badgeRect, 6))
                 {
                     using (Brush b = new SolidBrush(bgCol)) 
                     { 
@@ -533,30 +460,6 @@ namespace CinemaManagement.Forms.Staff
                 TextRenderer.DrawText(e.Graphics, catName, FontInterSmall, badgeRect, fgCol, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                 e.Handled = true;
             }
-        }
-
-        private GraphicsPath GetRoundedRect(Rectangle bounds, int radius)
-        {
-            int diameter = radius * 2;
-            Size size = new Size(diameter, diameter);
-            Rectangle arc = new Rectangle(bounds.Location, size);
-            GraphicsPath path = new GraphicsPath();
-            if (radius == 0) 
-            { 
-                path.AddRectangle(bounds); 
-                return path; 
-            }
-            path.AddArc(arc, 180, 90);
-            arc.X = bounds.Right - diameter;
-
-            path.AddArc(arc, 270, 90);
-            arc.Y = bounds.Bottom - diameter;
-
-            path.AddArc(arc, 0, 90);
-            arc.X = bounds.Left;
-            path.AddArc(arc, 90, 90);
-            path.CloseFigure();
-            return path;
         }
     }
 }

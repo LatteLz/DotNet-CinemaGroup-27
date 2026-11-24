@@ -1,16 +1,16 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
+﻿using CinemaManagement.Data;
+using CinemaManagement.Models;
 using CinemaManagement.Services;
 using CinemaManagement.Helpers;
 using CinemaManagement.Forms.Staff;
 using CinemaManagement.Forms.Admin;
 
-namespace CinemaManagement.Forms.Admin
+namespace CinemaManagement.Forms.Staff
 {
     public partial class FrmLogin : Form
     {
         private readonly AuthService _authService;
+        private readonly ErrorProvider _errors = new() { BlinkStyle = ErrorBlinkStyle.NeverBlink };
 
         private readonly Color COLOR_CANVAS = ColorTranslator.FromHtml("#101418");
         private readonly Color COLOR_CARD_BG = ColorTranslator.FromHtml("#181C20");
@@ -32,7 +32,6 @@ namespace CinemaManagement.Forms.Admin
         private Label lblForgotPassword;
         private TextBox txtPassword;
         private Button btnShowPassword;
-        private CheckBox chkRemember;
         private Button btnLogin;
         private Label lblQuickRoleTitle;
         private Button btnQuickAdmin;
@@ -44,6 +43,7 @@ namespace CinemaManagement.Forms.Admin
             _authService = new AuthService();
             SetupMasterLayout();
             BuildLoginCard();
+            WindowLayout.ScaleToStandard(this);
         }
 
         private void SetupMasterLayout()
@@ -183,17 +183,6 @@ namespace CinemaManagement.Forms.Admin
                 }
             };
 
-            chkRemember = new CheckBox
-            {
-                Text = "Duy trì đăng nhập phiên làm việc",
-                Font = new Font("Segoe UI", 9f),
-                ForeColor = COLOR_TEXT_SECONDARY,
-                Location = new Point(35, 290),
-                Size = new Size(300, 24),
-                Checked = false,
-                AutoSize = true
-            };
-
             btnLogin = new Button
             {
                 Text = "ĐĂNG NHẬP ➔",
@@ -234,8 +223,8 @@ namespace CinemaManagement.Forms.Admin
             };
             btnQuickAdmin.FlatAppearance.BorderColor = COLOR_BORDER;
             btnQuickAdmin.Click += (s, e) => {
-                txtUsername.Text = "admin.director@cineluxe.vn";
-                txtPassword.Text = "admin123";
+                txtUsername.Text = DbInitializer.DefaultAdminUsername;
+                txtPassword.Text = DbInitializer.DefaultAdminPassword;
                 ExecuteLogin();
             };
 
@@ -252,8 +241,8 @@ namespace CinemaManagement.Forms.Admin
             };
             btnQuickStaff.FlatAppearance.BorderColor = COLOR_BORDER;
             btnQuickStaff.Click += (s, e) => {
-                txtUsername.Text = "staff.pos@cineluxe.vn";
-                txtPassword.Text = "admin123";
+                txtUsername.Text = DbInitializer.DefaultStaffUsername;
+                txtPassword.Text = DbInitializer.DefaultStaffPassword;
                 ExecuteLogin();
             };
 
@@ -261,7 +250,6 @@ namespace CinemaManagement.Forms.Admin
             pnlCard.Controls.Add(btnQuickAdmin);
             pnlCard.Controls.Add(lblQuickRoleTitle);
             pnlCard.Controls.Add(btnLogin);
-            pnlCard.Controls.Add(chkRemember);
             pnlCard.Controls.Add(btnShowPassword);
             pnlCard.Controls.Add(txtPassword);
             pnlCard.Controls.Add(lblForgotPassword);
@@ -279,38 +267,51 @@ namespace CinemaManagement.Forms.Admin
         private void ExecuteLogin()
         {
             string username = txtUsername.Text.Trim();
-            string password = txtPassword.Text.Trim();
+            string password = txtPassword.Text;
 
-            if (!ValidationHelper.IsNotEmpty(username, password))
+            _errors.Clear();
+            if (!ValidationHelper.IsNotEmpty(username))
+                _errors.SetError(txtUsername, "Vui lòng nhập tên đăng nhập");
+            else if (!ValidationHelper.IsValidUsername(username))
+                _errors.SetError(txtUsername, "Tên đăng nhập 3-50 ký tự: chữ, số, . _ - @");
+            if (!ValidationHelper.IsNotEmpty(password))
+                _errors.SetError(txtPassword, "Vui lòng nhập mật khẩu");
+
+            if (_errors.GetError(txtUsername).Length > 0 || _errors.GetError(txtPassword).Length > 0)
             {
-                MessageBox.Show("Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                (_errors.GetError(txtUsername).Length > 0 ? txtUsername : txtPassword).Focus();
                 return;
             }
 
             try
             {
-                var user = _authService.Login(username, password);
-                if (user != null)
+                var user = _authService.Login(username, password, out string error);
+                if (user == null)
                 {
-                    MessageBox.Show($"Đăng nhập thành công!\nXin chào: {user.Username} ({user.Role})", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    this.Hide();
-                    
-                    if (user.Role == "Admin")
-                    {
-                        FrmAdminMovies mainAdmin = new FrmAdminMovies();
-                        mainAdmin.ShowDialog();
-                    }
-                    else
-                    {
-                        FrmStaffPOS mainStaff = new FrmStaffPOS();
-                        mainStaff.ShowDialog();
-                    }
-                    this.Close();
+                    _errors.SetError(txtPassword, error);
+                    MessageBox.Show(error, "Lỗi đăng nhập", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    txtPassword.Clear();
+                    txtPassword.Focus();
+                    return;
                 }
-                else
+
+                AppSession.SignIn(user);
+                MessageBox.Show($"Đăng nhập thành công!\nXin chào: {user.Fullname} ({user.Role})", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                this.Hide();
+
+                Form mainForm = user.Role == Roles.Admin
+                    ? new FrmAdminDashboard()
+                    : new FrmStaffPOS();
+                mainForm.ShowDialog();
+
+                foreach (var f in Application.OpenForms.Cast<Form>()
+                             .Where(f => f != this && f is not FrmRoleSelection && f.GetType().Namespace != typeof(Kiosk.KioskFlow).Namespace)
+                             .ToList())
                 {
-                    MessageBox.Show("Tên đăng nhập hoặc mật khẩu không chính xác!", "Lỗi đăng nhập", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    f.Close();
                 }
+                AppSession.SignOut();
+                this.Close();
             }
             catch (Exception ex)
             {

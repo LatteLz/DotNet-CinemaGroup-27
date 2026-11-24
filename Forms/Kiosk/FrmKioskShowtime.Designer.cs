@@ -1,8 +1,4 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
-
-namespace CinemaManagement.Forms.Kiosk;
+﻿namespace CinemaManagement.Forms.Kiosk;
 
 partial class FrmKioskShowtime
 {

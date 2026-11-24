@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CinemaManagement.Models
@@ -8,20 +8,25 @@ namespace CinemaManagement.Models
         [Key]
         public int TicketId { get; set; }
 
+        [Required]
+        [StringLength(40)]
+        public string TicketCode { get; set; } = string.Empty;
+
         public int BookingId { get; set; }
 
-        [ForeignKey("BookingId")]
-        public virtual Booking Booking { get; set; } 
+        [ForeignKey(nameof(BookingId))]
+        public virtual Booking Booking { get; set; } = null!;
 
         public int ShowtimeId { get; set; }
 
-        [ForeignKey("ShowtimeId")]
-        public virtual Showtime Showtime { get; set; } 
+        [ForeignKey(nameof(ShowtimeId))]
+        public virtual Showtime Showtime { get; set; } = null!;
 
         public int SeatId { get; set; }
 
-        [ForeignKey("SeatId")]
-        public virtual Seat Seat { get; set; }
-        public decimal Price { get; set; } 
+        [ForeignKey(nameof(SeatId))]
+        public virtual Seat Seat { get; set; } = null!;
+
+        public decimal Price { get; set; }
     }
 }

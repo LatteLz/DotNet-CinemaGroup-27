@@ -1,246 +1,243 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
-using CinemaManagement.Data;
-using CinemaManagement.Models;
-using Microsoft.EntityFrameworkCore;
+using CinemaManagement.Controls;
+using CinemaManagement.Services;
+using CinemaManagement.Helpers;
 
 namespace CinemaManagement.Forms.Kiosk;
 
 public partial class FrmKioskSeat : Form
+{
+    private readonly int _showtimeId;
+    private readonly string _sessionId = SeatHoldService.NewSessionId();
+    private readonly ShowtimeService _showtimeService = new();
+    private readonly SeatHoldService _seatHoldService = new();
+
+    private int _movieId;
+    private SeatMapControl _seatMapControl = null!;
+    private System.Windows.Forms.Timer _clockTimer = null!;
+    private System.Windows.Forms.Timer _countdownTimer = null!;
+    private bool _expiredHandled;
+
+    public string SessionId => _sessionId;
+
+    public FrmKioskSeat(int showtimeId)
     {
-        private readonly int _showtimeId;
-        private int _movieId;
-        private decimal _seatPrice = 160000m;
-        private List<string> _selectedSeats = new();
+        _showtimeId = showtimeId;
+        InitializeComponent();
+        InitializeLegendItems();
+        RegisterEvents();
+        LoadShowtimeDetails();
+        InitSeatMapControl();
+        StartCountdown();
+        WindowLayout.ScaleToScreen(this);
+    }
 
-        private Controls.SeatMapControl _seatMapControl = null!;
-        private System.Windows.Forms.Timer _timer = null!;
-        private int _remainingSeconds = 180;
-        private System.Windows.Forms.Timer _countdownTimer = null!;
+    private void InitializeLegendItems()
+    {
+        AddLegendItem(pnlLegend, SeatMapControl.ColorAvailable, "Ghế thường (trống)", 45);
+        AddLegendItem(pnlLegend, SeatMapControl.ColorVip, "Ghế VIP (trống)", 71);
+        AddLegendItem(pnlLegend, SeatMapControl.ColorCouple, "Ghế Đôi (trống)", 97);
+        AddLegendItem(pnlLegend, SeatMapControl.ColorSelected, "Ghế bạn đang chọn", 123);
+        AddLegendItem(pnlLegend, SeatMapControl.ColorSold, "Đã bán / đang có người giữ", 149);
+    }
 
-        public FrmKioskSeat(int showtimeId)
+    private static void AddLegendItem(Control container, Color color, string text, int top)
+    {
+        container.Controls.Add(new Panel { Size = new Size(20, 20), Location = new Point(16, top), BackColor = color });
+        container.Controls.Add(new Label
         {
-            _showtimeId = showtimeId;
-            InitializeComponent();
-            InitializeLegendItems();
-            RegisterEvents();
-            LoadShowtimeDetails();
-            InitSeatMapControl();
-            StartCountdown();
-        }
+            Text = text,
+            Font = new Font("Segoe UI", 9.5F),
+            ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
+            Location = new Point(46, top + 1),
+            AutoSize = true
+        });
+    }
 
-        private void InitializeLegendItems()
+    private void RegisterEvents()
+    {
+        btnBack.Click += (_, _) =>
         {
-            AddLegendItem(pnlLegend, "#222930", "Ghế trống (Standard)", 50);
-            AddLegendItem(pnlLegend, "#ffb961", "Ghế bạn đang chọn", 90);
-            AddLegendItem(pnlLegend, "#334155", "Ghế đã có người đặt", 130);
-        }
+            _countdownTimer.Stop();
+            ReleaseMySeats();
 
-        private void RegisterEvents()
-        {
-            btnBack.Click += (s, e) =>
+            var showtimeForm = Application.OpenForms.OfType<FrmKioskShowtime>().FirstOrDefault();
+            if (showtimeForm == null)
             {
-                _countdownTimer?.Stop();
-                ReleaseSeatHolds();
-
-                var showtimeForm = Application.OpenForms.OfType<FrmKioskShowtime>().FirstOrDefault();
-                if (showtimeForm != null)
-                {
-                    showtimeForm.TopMost = true;
-                    showtimeForm.Show();
-                    showtimeForm.Activate();
-                }
-                else
-                {
-                    var newShowtime = new FrmKioskShowtime(_movieId);
-                    newShowtime.TopMost = true;
-                    newShowtime.Show();
-                }
-                this.Close();
-            };
-
-            btnExit.Click += (s, e) =>
-            {
-                _countdownTimer?.Stop();
-                ReleaseSeatHolds();
-
-                Form? mainForm = Application.OpenForms.Cast<Form>()
-                    .FirstOrDefault(f => f.Name == "FrmMain" || f.Name == "FrmRoleSelection" || f.Tag?.ToString() == "Main");
-                mainForm?.Show();
-                this.Close();
-            };
-
-            btnContinuePayment.Click += (s, e) =>
-            {
-                if (_selectedSeats.Any())
-                {
-                    var holdService = new CinemaManagement.Services.SeatHoldService();
-                    bool success = holdService.HoldSeats(_showtimeId, _selectedSeats, holdDurationMinutes: 3);
-
-                    if (success)
-                    {
-                        FrmKioskCombo frmCombo = new FrmKioskCombo(_showtimeId, _selectedSeats, _selectedSeats.Count * _seatPrice);
-                        frmCombo.TopMost = true;
-                        frmCombo.Show();
-                        this.Hide();
-                    }
-                    else
-                    {
-                        MessageBox.Show("Rất tiếc, một số ghế bạn chọn vừa bị giữ bởi khách hàng khác. Vui lòng chọn ghế khác!",
-                            "CineLuxe Kiosk", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        _seatMapControl?.LoadSeatMap(_showtimeId);
-                    }
-                }
-                else
-                {
-                    MessageBox.Show("Vui lòng chọn ít nhất 1 ghế trước khi tiếp tục!",
-                        "CineLuxe Kiosk", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-            };
-
-            _timer = new System.Windows.Forms.Timer { Interval = 1000 };
-            _timer.Tick += (s, e) =>
-            {
-                if (lblClock != null && !lblClock.IsDisposed)
-                    lblClock.Text = DateTime.Now.ToString("HH:mm:ss");
-            };
-            _timer.Start();
-
-            this.FormClosed += (_, _) =>
-            {
-                _timer?.Dispose();
-                _countdownTimer?.Dispose();
-            };
-        }
-
-        private void InitSeatMapControl()
-        {
-            _seatMapControl = new Controls.SeatMapControl
-            {
-                Location = new Point(184, 90),
-                Size = new Size(1100, 750)
-            };
-            _seatMapControl.OnSeatSelectionChanged += (selectedSeats) =>
-            {
-                _selectedSeats = selectedSeats;
-                UpdateSummary();
-            };
-
-            pnlScreenArea.Controls.Add(_seatMapControl);
-            _seatMapControl.LoadSeatMap(_showtimeId);
-        }
-
-        private void AddLegendItem(Panel container, string hexColor, string text, int top)
-        {
-            Panel box = new Panel
-            {
-                Size = new Size(24, 24),
-                Location = new Point(16, top),
-                BackColor = ColorTranslator.FromHtml(hexColor)
-            };
-            Label lbl = new Label
-            {
-                Text = text,
-                Font = new Font("Segoe UI", 9.5F),
-                ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
-                Location = new Point(50, top + 2),
-                AutoSize = true
-            };
-            container.Controls.Add(box);
-            container.Controls.Add(lbl);
-        }
-
-        private void LoadShowtimeDetails()
-        {
-            using var db = new CinemaDbContext();
-            var showtime = db.Showtimes
-                .Include(s => s.Movie)
-                .Include(s => s.Room)
-                .FirstOrDefault(s => s.ShowtimeId == _showtimeId);
-
-            if (showtime != null)
-            {
-                _movieId = showtime.MovieId;
-                if (showtime.Price > 0) _seatPrice = showtime.Price;
-
-                string movieTitle = showtime.Movie?.Title ?? "PHIM CHIẾU RẠP";
-                string roomName = showtime.Room?.RoomName ?? $"Phòng {showtime.RoomId}";
-
-                lblMovieTitle.Text = movieTitle.ToUpper();
-                lblShowtimeInfo.Text = $"Suất: {showtime.StartTime:HH:mm - dd/MM/yyyy}\nPhòng chiếu: {roomName}\nGiá vé: {_seatPrice:N0} đ/ghế";
+                showtimeForm = new FrmKioskShowtime(_movieId) { TopMost = true };
             }
-        }
+            showtimeForm.Show();
+            showtimeForm.Activate();
+            Close();
+        };
 
-        private void UpdateSummary()
+        btnExit.Click += (_, _) =>
         {
-            if (_selectedSeats.Any())
-            {
-                lblSelectedSeats.Text = $"GHẾ ĐÃ CHỌN ({_selectedSeats.Count}): {string.Join(", ", _selectedSeats)}";
-                decimal total = _selectedSeats.Count * _seatPrice;
-                lblTotalPrice.Text = $"TỔNG TIỀN: {total:N0} đ";
-                btnContinuePayment.Enabled = true;
-                btnContinuePayment.BackColor = ColorTranslator.FromHtml("#ffb961");
-            }
-            else
-            {
-                lblSelectedSeats.Text = "GHẾ ĐÃ CHỌN: (Chưa chọn ghế)";
-                lblTotalPrice.Text = "TỔNG TIỀN: 0 đ";
-                btnContinuePayment.Enabled = false;
-                btnContinuePayment.BackColor = ColorTranslator.FromHtml("#282C31");
-            }
-        }
+            _countdownTimer.Stop();
+            ReleaseMySeats();
+            KioskFlow.ExitKiosk(this);
+        };
 
-        private void StartCountdown()
+        btnContinuePayment.Click += (_, _) =>
         {
-            _countdownTimer = new System.Windows.Forms.Timer { Interval = 1000 };
-            _countdownTimer.Tick += (s, e) =>
+            var seats = _seatMapControl.SelectedSeats;
+            if (seats.Count == 0)
             {
-                _remainingSeconds--;
+                MessageBox.Show("Vui lòng chọn ít nhất 1 ghế trước khi tiếp tục!", "CineLuxe Kiosk",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
-                if (_remainingSeconds >= 0)
-                {
-                    int mins = _remainingSeconds / 60;
-                    int secs = _remainingSeconds % 60;
-                    lblCountdown.Text = $"{mins:D2}:{secs:D2}";
+            if (_seatHoldService.GetSessionExpiry(_sessionId) == null)
+            {
+                HandleExpired();
+                return;
+            }
 
-                    if (_remainingSeconds <= 30)
-                    {
-                        lblCountdown.ForeColor = ColorTranslator.FromHtml("#ef4444");
-                    }
-                }
-                else
-                {
-                    _countdownTimer.Stop();
-                    ReleaseSeatHolds();
-
-                    MessageBox.Show(
-                        "Đã hết thời gian 3 phút giữ ghế! Hệ thống sẽ quay lại màn hình chọn phim.",
-                        "Hết thời gian thao tác",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
-
-                    new FrmKioskHome().Show();
-                    this.Close();
-                }
+            var order = new KioskOrder
+            {
+                ShowtimeId = _showtimeId,
+                MovieId = _movieId,
+                SessionId = _sessionId,
+                SeatIds = seats.Select(s => s.SeatId).ToList(),
+                SeatNumbers = seats.Select(s => s.SeatNumber).ToList(),
+                TicketTotal = seats.Sum(s => s.Price)
             };
-            _countdownTimer.Start();
-        }
 
-        private void ReleaseSeatHolds()
+            var frmCombo = new FrmKioskCombo(order) { TopMost = true };
+            frmCombo.Show();
+            Hide();
+        };
+
+        _clockTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+        _clockTimer.Tick += (_, _) =>
         {
-            try
+            if (lblClock != null && !lblClock.IsDisposed)
+                lblClock.Text = DateTime.Now.ToString("HH:mm:ss");
+        };
+        _clockTimer.Start();
+
+        VisibleChanged += (_, _) =>
+        {
+            if (Visible && _seatMapControl != null) _seatMapControl.RefreshStates();
+        };
+
+        FormClosed += (_, _) =>
+        {
+            _clockTimer.Dispose();
+            _countdownTimer.Dispose();
+            ReleaseMySeats();
+        };
+    }
+
+    private void LoadShowtimeDetails()
+    {
+        try
+        {
+            var showtime = _showtimeService.GetById(_showtimeId);
+            if (showtime == null)
             {
-                using var db = new CinemaDbContext();
-                var holds = db.SeatHolds.Where(h => h.ShowtimeId == _showtimeId).ToList();
-                if (holds.Any())
-                {
-                    db.SeatHolds.RemoveRange(holds);
-                    db.SaveChanges();
-                }
+                MessageBox.Show("Suất chiếu không tồn tại.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
-            catch { }
+
+            _movieId = showtime.MovieId;
+            lblMovieTitle.Text = showtime.MovieTitle.ToUpper();
+            lblShowtimeInfo.Text =
+                $"Suất: {showtime.StartTime:HH:mm - dd/MM/yyyy}\nPhòng chiếu: {showtime.RoomName}\n" +
+                $"Ghế thường: {showtime.Price:N0} đ • VIP +{Models.SeatTypes.VipSurcharge:N0} đ • Đôi x2";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Không tải được thông tin suất chiếu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
+
+    private void InitSeatMapControl()
+    {
+        _seatMapControl = new SeatMapControl
+        {
+            Location = new Point(184, 90),
+            Size = new Size(1100, 750)
+        };
+        _seatMapControl.OnSeatSelectionChanged += _ => UpdateSummary();
+
+        pnlScreenArea.Controls.Add(_seatMapControl);
+        _seatMapControl.LoadSeatMap(_showtimeId, _sessionId);
+    }
+
+    private void UpdateSummary()
+    {
+        var seats = _seatMapControl.SelectedSeats;
+        if (seats.Count > 0)
+        {
+            lblSelectedSeats.Text = $"GHẾ ĐÃ CHỌN ({seats.Count}): {string.Join(", ", seats.Select(s => s.SeatNumber))}";
+            lblTotalPrice.Text = $"TỔNG TIỀN: {seats.Sum(s => s.Price):N0} đ";
+            btnContinuePayment.Enabled = true;
+            btnContinuePayment.BackColor = ColorTranslator.FromHtml("#ffb961");
+        }
+        else
+        {
+            lblSelectedSeats.Text = "GHẾ ĐÃ CHỌN: (Chưa chọn ghế)";
+            lblTotalPrice.Text = "TỔNG TIỀN: 0 đ";
+            btnContinuePayment.Enabled = false;
+            btnContinuePayment.BackColor = ColorTranslator.FromHtml("#282C31");
+        }
+        UpdateCountdownLabel();
+    }
+
+    private void StartCountdown()
+    {
+        _countdownTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+        _countdownTimer.Tick += (_, _) => UpdateCountdownLabel();
+        _countdownTimer.Start();
+        UpdateCountdownLabel();
+    }
+
+    private void UpdateCountdownLabel()
+    {
+        if (_expiredHandled || IsDisposed) return;
+
+        DateTime? expiry;
+        try { expiry = _seatHoldService.GetSessionExpiry(_sessionId); }
+        catch { return; }
+
+        bool hasSelection = _seatMapControl != null && _seatMapControl.SelectedSeats.Count > 0;
+        if (expiry == null)
+        {
+            if (hasSelection)
+            {
+                HandleExpired();
+                return;
+            }
+            lblCountdown.Text = "03:00";
+            lblCountdown.ForeColor = ColorTranslator.FromHtml("#ffb961");
+            return;
+        }
+
+        TimeSpan remaining = expiry.Value - DateTime.Now;
+        if (remaining <= TimeSpan.Zero)
+        {
+            HandleExpired();
+            return;
+        }
+
+        lblCountdown.Text = $"{(int)remaining.TotalMinutes:D2}:{remaining.Seconds:D2}";
+        lblCountdown.ForeColor = remaining.TotalSeconds <= 30
+            ? ColorTranslator.FromHtml("#ef4444")
+            : ColorTranslator.FromHtml("#ffb961");
+    }
+
+    private void HandleExpired()
+    {
+        if (_expiredHandled) return;
+        _expiredHandled = true;
+        _countdownTimer?.Stop();
+        KioskFlow.HandleHoldExpired(_sessionId, this);
+    }
+
+    private void ReleaseMySeats()
+    {
+        try { _seatHoldService.ReleaseSession(_sessionId); }
+        catch { }
+    }
+}

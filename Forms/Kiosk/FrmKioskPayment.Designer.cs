@@ -1,8 +1,4 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
-
-namespace CinemaManagement.Forms.Kiosk;
+﻿namespace CinemaManagement.Forms.Kiosk;
 
     partial class FrmKioskPayment
     {
@@ -24,7 +20,6 @@ namespace CinemaManagement.Forms.Kiosk;
         private Label lblPayTitle;
         private Button btnQr;
         private Button btnCard;
-        private Button btnCash;
         private Label lblSelectedMethod;
         private Panel pnlQrBox;
         private Panel qrPlaceholder;
@@ -216,19 +211,6 @@ namespace CinemaManagement.Forms.Kiosk;
             };
             btnCard.FlatAppearance.BorderSize = 0;
 
-            btnCash = new Button
-            {
-                Text = "Thanh toán tại quầy thu ngân",
-                Font = new Font("Segoe UI", 10.5F, FontStyle.Bold),
-                ForeColor = ColorTranslator.FromHtml("#c1c7cf"),
-                BackColor = ColorTranslator.FromHtml("#262a2f"),
-                FlatStyle = FlatStyle.Flat,
-                Size = new Size(300, 70),
-                Location = new Point(700, 80),
-                Cursor = Cursors.Hand
-            };
-            btnCash.FlatAppearance.BorderSize = 0;
-
             lblSelectedMethod = new Label
             {
                 Text = "Phương thức đang chọn: Quét mã QR Ngân hàng / Ví điện tử",
@@ -288,7 +270,7 @@ namespace CinemaManagement.Forms.Kiosk;
             };
             btnConfirmPay.FlatAppearance.BorderSize = 0;
 
-            pnlRight.Controls.AddRange(new Control[] { lblPayTitle, btnQr, btnCard, btnCash, lblSelectedMethod, pnlQrBox, btnConfirmPay });
+            pnlRight.Controls.AddRange(new Control[] { lblPayTitle, btnQr, btnCard, lblSelectedMethod, pnlQrBox, btnConfirmPay });
 
             this.Controls.Add(pnlHeader);
             this.Controls.Add(pnlLeft);

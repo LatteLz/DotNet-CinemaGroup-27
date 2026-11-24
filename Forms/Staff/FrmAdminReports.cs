@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data.SQLite;
-using System.Drawing;
-using System.Globalization;
-using System.IO;
-using System.Windows.Forms;
-using CinemaManagement.Forms.Staff;
+﻿using System.Drawing.Drawing2D;
+using CinemaManagement.Forms.Shared;
+using CinemaManagement.Helpers;
+using CinemaManagement.Services;
 
 namespace CinemaManagement.Forms.Staff
 {
@@ -18,15 +14,35 @@ namespace CinemaManagement.Forms.Staff
         private readonly Color ColorAccentAmber = ColorTranslator.FromHtml("#f59e0b");
         private readonly Color ColorTextMuted = ColorTranslator.FromHtml("#94a3b8");
 
-        private string connectionString = "Data Source=cinema.db;Version=3;";
+        private readonly ReportService _reportService = new();
         private Panel[] kpiCards = new Panel[4];
         private ErrorProvider errorProvider = new ErrorProvider();
+
+        private enum Period { Today, ThisMonth, AllTime }
+        private Period _period = Period.ThisMonth;
+        private string _periodLabel = "";
+
+        private RevenueSummaryDto _summary = new();
+        private List<MovieRevenueReportDto> _byMovie = new();
 
         public FrmAdminReports()
         {
             InitializeComponent();
+            AppSession.RequireAdmin(this);
             InitializeCustomEvents();
             LoadRealDataFromDatabase();
+            WindowLayout.ScaleToStandard(this);
+        }
+
+        private (DateTime From, DateTime To) GetRange()
+        {
+            DateTime today = DateTime.Today;
+            return _period switch
+            {
+                Period.Today => (today, today.AddDays(1)),
+                Period.ThisMonth => (new DateTime(today.Year, today.Month, 1), new DateTime(today.Year, today.Month, 1).AddMonths(1)),
+                _ => (DateTime.MinValue, DateTime.MaxValue)
+            };
         }
 
         private void InitializeCustomEvents()
@@ -34,62 +50,25 @@ namespace CinemaManagement.Forms.Staff
             this.BackColor = ColorBg;
             this.ForeColor = Color.White;
 
-            if (lnkPos != null)
-            {
-                lnkPos.LinkClicked += (s, e) => {
-                    var posForm = new FrmStaffPOS();
-                    posForm.Show();
-                    this.Hide();
-                };
-            }
+            if (lblUser != null) lblUser.Text = $"{AppSession.DisplayName}\r\n{AppSession.CurrentUser?.Role}";
+            if (lblShift != null) lblShift.Text = $"NGÀY: {DateTime.Now:dd/MM/yyyy}";
 
-            if (lnkCombo != null)
-            {
-                lnkCombo.LinkClicked += (s, e) => {
-                    var comboForm = new FrmAdminCombos();
-                    comboForm.Show();
-                    this.Hide();
-                };
-            }
+            if (lnkPos != null) lnkPos.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmStaffPOS>(this);
+            if (lnkCombo != null) lnkCombo.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmAdminCombos>(this);
+            if (lnkOccupancy != null) lnkOccupancy.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmOccupancyReport>(this);
+            if (lnkUsers != null) lnkUsers.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmAdminUsers>(this);
 
-            if (lnkReports != null)
+            if (btnMonthThis != null)
             {
-                lnkReports.LinkClicked += (s, e) => { };
-            }
-
-            if (lnkOccupancy != null)
-            {
-                lnkOccupancy.LinkClicked += (s, e) => {
-                    var occupancyForm = new FrmOccupancyReport();
-                    occupancyForm.Show();
-                    this.Hide();
-                };
-            }
-
-            if (lnkUsers != null)
-            {
-                lnkUsers.LinkClicked += (s, e) => {
-                    var usersForm = new FrmAdminUsers();
-                    usersForm.Show();
-                    this.Hide();
-                };
-            }
-
-            if (btnQuery != null)
-            {
-                btnQuery.Click += (s, e) => {
-                    errorProvider.Clear();
+                btnMonthThis.Click += (s, e) =>
+                {
+                    _period = _period switch
+                    {
+                        Period.Today => Period.ThisMonth,
+                        Period.ThisMonth => Period.AllTime,
+                        _ => Period.Today
+                    };
                     LoadRealDataFromDatabase();
-                    MessageBox.Show("Đã truy vấn dữ liệu tài chính & doanh thu mới nhất từ CSDL.", "Truy Vấn", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                };
-            }
-
-            if (btnRefresh != null)
-            {
-                btnRefresh.Click += (s, e) => {
-                    errorProvider.Clear();
-                    LoadRealDataFromDatabase();
-                    MessageBox.Show("Làm mới dữ liệu báo cáo thành công!", "Làm Mới", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 };
             }
 
@@ -114,7 +93,8 @@ namespace CinemaManagement.Forms.Staff
                             {
                                 using (StreamWriter sw = new StreamWriter(sfd.FileName, false, System.Text.Encoding.UTF8))
                                 {
-                                    sw.WriteLine("STT,TEN PHIM / COMBO,PHAN LOAI,SUAT CHIEU,TONG VE,LAP DAY TB,DOANH THU (VND),THOI GIAN GIAO DICH");
+                                    sw.WriteLine($"BAO CAO DOANH THU THEO PHIM - {_periodLabel}");
+                                    sw.WriteLine("STT,TEN PHIM,DOANH THU VE,SO SUAT,TONG VE,LAP DAY TB,TONG DOANH THU (VND),TY TRONG");
                                     foreach (DataGridViewRow row in dgvReports.Rows)
                                     {
                                         if (row.IsNewRow) continue;
@@ -143,6 +123,9 @@ namespace CinemaManagement.Forms.Staff
 
             BuildKpiCardsDynamic();
             StyleDataGridView();
+
+            pnlBarChart.Paint += PnlBarChart_Paint;
+            pnlDonutChart.Paint += PnlDonutChart_Paint;
         }
 
         private void BuildKpiCardsDynamic()
@@ -221,92 +204,133 @@ namespace CinemaManagement.Forms.Staff
 
         private void LoadRealDataFromDatabase()
         {
+            var (from, to) = GetRange();
+            _periodLabel = _period switch
+            {
+                Period.Today => $"Hôm nay {DateTime.Today:dd/MM/yyyy}",
+                Period.ThisMonth => $"Tháng {DateTime.Today:MM/yyyy}",
+                _ => "Toàn thời gian"
+            };
+            if (btnMonthThis != null) btnMonthThis.Text = $"{_periodLabel} ▾";
+
             try
             {
-                decimal totalRevenue = 0;
-                int totalTransactions = 0;
-                decimal totalComboRevenue = 0;
-
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
-                {
-                    conn.Open();
-
-                    string queryStats = "SELECT IFNULL(SUM(TotalAmount), 0) AS TotalRev, COUNT(Id) AS TotalTrans FROM Bookings;";
-                    using (SQLiteCommand cmd = new SQLiteCommand(queryStats, conn))
-                    {
-                        using (SQLiteDataReader reader = cmd.ExecuteReader())
-                        {
-                            if (reader.Read())
-                            {
-                                totalRevenue = Convert.ToDecimal(reader["TotalRev"], CultureInfo.InvariantCulture);
-                                totalTransactions = Convert.ToInt32(reader["TotalTrans"]);
-                            }
-                        }
-                    }
-
-                    string queryCombo = "SELECT IFNULL(SUM(Quantity * UnitPrice), 0) AS ComboRev FROM BookingCombos;";
-                    using (SQLiteCommand cmd = new SQLiteCommand(queryCombo, conn))
-                    {
-                        object result = cmd.ExecuteScalar();
-                        if (result != null && result != DBNull.Value)
-                        {
-                            totalComboRevenue = Convert.ToDecimal(result, CultureInfo.InvariantCulture);
-                        }
-                    }
-
-                    decimal totalTicketRevenue = totalRevenue - totalComboRevenue;
-                    if (totalTicketRevenue < 0) totalTicketRevenue = totalRevenue;
-
-                    if (kpiCards[0]?.Controls["lblKpiVal0"] is Label lbl1) lbl1.Text = $"{totalRevenue:N0} đ";
-                    if (kpiCards[0]?.Controls["lblKpiSub0"] is Label sub1) sub1.Text = "Đồng bộ từ bảng Bookings";
-
-                    if (kpiCards[1]?.Controls["lblKpiVal1"] is Label lbl2) lbl2.Text = $"{totalTicketRevenue:N0} đ";
-                    if (kpiCards[1]?.Controls["lblKpiSub1"] is Label sub2) sub2.Text = "Doanh thu thuần tiền vé";
-
-                    if (kpiCards[2]?.Controls["lblKpiVal2"] is Label lbl3) lbl3.Text = $"{totalComboRevenue:N0} đ";
-                    if (kpiCards[2]?.Controls["lblKpiSub2"] is Label sub3) sub3.Text = "Doanh thu từ BookingCombos";
-
-                    if (kpiCards[3]?.Controls["lblKpiVal3"] is Label lbl4) lbl4.Text = $"{totalTransactions:N0} ĐƠN";
-                    if (kpiCards[3]?.Controls["lblKpiSub3"] is Label sub4) sub4.Text = "Tổng số hóa đơn đặt vé";
-
-                    string queryGrid = "SELECT MovieTitle, ShowtimeInfo, TotalAmount, CreatedAt FROM Bookings ORDER BY CreatedAt DESC;";
-                    using (SQLiteCommand cmd = new SQLiteCommand(queryGrid, conn))
-                    {
-                        using (SQLiteDataReader reader = cmd.ExecuteReader())
-                        {
-                            dgvReports.Rows.Clear();
-                            int stt = 1;
-                            while (reader.Read())
-                            {
-                                string movieTitle = reader["MovieTitle"]?.ToString() ?? "N/A";
-                                string showtimeInfo = reader["ShowtimeInfo"]?.ToString() ?? "N/A";
-                                
-                                decimal amount = 0;
-                                string rawAmount = reader["TotalAmount"]?.ToString() ?? "0";
-                                decimal.TryParse(rawAmount, NumberStyles.Any, CultureInfo.InvariantCulture, out amount);
-
-                                string createdAt = reader["CreatedAt"]?.ToString() ?? DateTime.Now.ToString("dd/MM/yyyy HH:mm");
-
-                                dgvReports.Rows.Add(
-                                    stt.ToString("D2"),
-                                    movieTitle,
-                                    "PHIM CHIẾU RẠP",
-                                    showtimeInfo,
-                                    "1 vé",
-                                    "100%",
-                                    $"{amount:N0} đ",
-                                    createdAt
-                                );
-                                stt++;
-                            }
-                        }
-                    }
-                }
+                _summary = _reportService.GetSummary(from, to);
+                _byMovie = _reportService.GetRevenueByMovie(from, to);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi kết nối CSDL lấy báo cáo: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Lỗi truy vấn báo cáo: " + ex.Message, "Lỗi CSDL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
+
+            SetKpi(0, $"{_summary.TotalRevenue:N0} đ", _periodLabel);
+            SetKpi(1, $"{_summary.TicketRevenue:N0} đ", $"{_summary.TicketsSold:N0} vé đã bán");
+            SetKpi(2, $"{_summary.ComboRevenue:N0} đ", "Doanh thu bắp nước");
+            SetKpi(3, $"{_summary.SuccessfulTransactions:N0} ĐƠN", $"Kiosk {_summary.KioskTransactions} • POS {_summary.PosTransactions}");
+
+            dgvReports.Rows.Clear();
+            decimal total = _summary.TotalRevenue;
+            int stt = 1;
+            foreach (var r in _byMovie)
+            {
+                double share = total > 0 ? (double)(r.TotalRevenue / total) * 100 : 0;
+                dgvReports.Rows.Add(
+                    stt.ToString("D2"),
+                    r.MovieName,
+                    $"{r.TicketRevenue:N0} đ",
+                    r.ShowtimeCount.ToString(),
+                    $"{r.TicketsSold:N0} vé",
+                    r.TotalSeats > 0 ? $"{r.AverageOccupancy:F1}%" : "-",
+                    $"{r.TotalRevenue:N0} đ",
+                    $"{share:F1}%");
+                stt++;
+            }
+
+            if (lblFooterStatus != null)
+                lblFooterStatus.Text = $"🟢 {_periodLabel} • Chỉ tính hóa đơn thanh toán thành công • Cập nhật {DateTime.Now:HH:mm:ss}";
+
+            pnlBarChart.Invalidate();
+            pnlDonutChart.Invalidate();
+        }
+
+        private void SetKpi(int index, string value, string sub)
+        {
+            if (kpiCards[index]?.Controls[$"lblKpiVal{index}"] is Label val) val.Text = value;
+            if (kpiCards[index]?.Controls[$"lblKpiSub{index}"] is Label s) s.Text = sub;
+        }
+
+        private void PnlBarChart_Paint(object? sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var items = _byMovie.Where(m => m.TotalRevenue > 0).Take(8).ToList();
+            var area = new Rectangle(20, 40, pnlBarChart.Width - 40, pnlBarChart.Height - 60);
+
+            using var muted = new SolidBrush(ColorTextMuted);
+            using var smallFont = new Font("Segoe UI", 7.5F);
+            if (items.Count == 0)
+            {
+                g.DrawString("Chưa có doanh thu trong kỳ này.", smallFont, muted, area.X, area.Y + 20);
+                return;
+            }
+
+            decimal max = items.Max(i => i.TotalRevenue);
+            int slot = area.Width / items.Count;
+            int barWidth = Math.Min(60, slot - 16);
+            using var barBrush = new SolidBrush(ColorPrimaryCyan);
+            using var valueBrush = new SolidBrush(ColorAccentAmber);
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                int h = (int)((double)(items[i].TotalRevenue / max) * (area.Height - 40));
+                int x = area.X + i * slot + (slot - barWidth) / 2;
+                int y = area.Bottom - 20 - h;
+                g.FillRectangle(barBrush, x, y, barWidth, h);
+
+                string value = items[i].TotalRevenue >= 1_000_000 ? $"{items[i].TotalRevenue / 1_000_000m:0.#}tr" : $"{items[i].TotalRevenue / 1000m:0}k";
+                g.DrawString(value, smallFont, valueBrush, x, y - 14);
+
+                string name = items[i].MovieName.Length > 14 ? items[i].MovieName[..13] + "…" : items[i].MovieName;
+                g.DrawString(name, smallFont, muted, new RectangleF(area.X + i * slot, area.Bottom - 18, slot, 16),
+                    new StringFormat { Alignment = StringAlignment.Center });
+            }
+        }
+
+        private void PnlDonutChart_Paint(object? sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            int kiosk = _summary.KioskTransactions;
+            int pos = _summary.PosTransactions;
+            int total = kiosk + pos;
+
+            using var muted = new SolidBrush(ColorTextMuted);
+            using var font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+            var rect = new Rectangle(30, 50, 130, 130);
+
+            if (total == 0)
+            {
+                using var empty = new Pen(Color.FromArgb(40, 255, 255, 255), 22);
+                g.DrawEllipse(empty, rect);
+                g.DrawString("Chưa có giao dịch", font, muted, 190, 105);
+                return;
+            }
+
+            float kioskAngle = 360f * kiosk / total;
+            using (var penKiosk = new Pen(ColorAccentAmber, 22))
+            using (var penPos = new Pen(ColorPrimaryCyan, 22))
+            {
+                if (kiosk > 0) g.DrawArc(penKiosk, rect, -90, kioskAngle);
+                if (pos > 0) g.DrawArc(penPos, rect, -90 + kioskAngle, 360 - kioskAngle);
+            }
+
+            using var amber = new SolidBrush(ColorAccentAmber);
+            using var cyan = new SolidBrush(ColorPrimaryCyan);
+            g.FillRectangle(amber, 190, 80, 12, 12);
+            g.DrawString($"Kiosk: {kiosk} đơn ({100.0 * kiosk / total:F0}%)", font, Brushes.White, 208, 77);
+            g.FillRectangle(cyan, 190, 115, 12, 12);
+            g.DrawString($"POS: {pos} đơn ({100.0 * pos / total:F0}%)", font, Brushes.White, 208, 112);
         }
     }
 }

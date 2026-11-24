@@ -1,9 +1,7 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
-using CinemaManagement.Forms.Staff;
+﻿using CinemaManagement.Forms.Staff;
 using CinemaManagement.Forms.Admin;
 using CinemaManagement.Forms.Kiosk;
+using CinemaManagement.Helpers;
 
 namespace CinemaManagement.Forms.Admin
 {
@@ -11,7 +9,6 @@ namespace CinemaManagement.Forms.Admin
     {
         private Panel? pnlSidebar;
         private Panel? pnlHeader;
-        private Panel? pnlFooter;
         private Label? lblTitle;
         private Label? lblSubtitle;
         
@@ -23,6 +20,7 @@ namespace CinemaManagement.Forms.Admin
         {
             InitializeComponent();
             SetupCustomUI();
+            WindowLayout.ScaleToStandard(this);
         }
 
         private void SetupCustomUI()
@@ -98,9 +96,9 @@ namespace CinemaManagement.Forms.Admin
                 "Dành cho khách hàng tra cứu phim, chọn suất chiếu, đặt ghế và tự thanh toán in vé tự động nhanh chóng.", 
                 "Khởi chạy Chế độ Ki-ốt →", Color.FromArgb(217, 119, 6), 610, (sender, e) => {
                     FrmKioskHome kioskHome = new FrmKioskHome();
+                    kioskHome.FormClosed += (_, _) => { if (!IsDisposed) Show(); };
                     this.Hide();
-                    kioskHome.ShowDialog();
-                    this.Show();
+                    kioskHome.Show();
                 });
             this.Controls.Add(cardKiosk);
 
@@ -113,21 +111,6 @@ namespace CinemaManagement.Forms.Admin
                     this.Show();
                 });
             this.Controls.Add(cardPos);
-
-            pnlFooter = new Panel();
-            pnlFooter.Dock = DockStyle.Bottom;
-            pnlFooter.Height = 50;
-            pnlFooter.BackColor = Color.FromArgb(22, 27, 34);
-
-            Label lblStatus = new Label();
-            lblStatus.Text = "  MÁY CHỦ NỘI BỘ: 123.0.0.4:5000 (ONLINE)  ";
-            lblStatus.Font = new Font("Segoe UI", 9F);
-            lblStatus.ForeColor = Color.DarkGray;
-            lblStatus.Location = new Point(250, 15);
-            lblStatus.AutoSize = true;
-            pnlFooter.Controls.Add(lblStatus);
-
-            this.Controls.Add(pnlFooter);
         }
 
         private Panel CreateCard(string title, string badge, string desc, string buttonText, Color btnColor, int leftPos, EventHandler onClickAction)

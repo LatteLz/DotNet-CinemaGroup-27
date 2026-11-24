@@ -1,19 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Windows.Forms;
-using Microsoft.EntityFrameworkCore;
-using CinemaManagement.Data;
+﻿using CinemaManagement.Helpers;
 using CinemaManagement.Models;
+using CinemaManagement.Services;
 
 namespace CinemaManagement.Forms.Kiosk
 {
     public partial class FrmKioskHome : Form
     {
        private System.Windows.Forms.Timer _timer;
+       private readonly MovieService _movieService = new();
+       private string _currentFilter = "All";
 
         public FrmKioskHome()
         {
@@ -21,6 +16,7 @@ namespace CinemaManagement.Forms.Kiosk
             InitializeFilterButtons();
             RegisterEvents();
             LoadMovies();
+            WindowLayout.ScaleToScreen(this);
         }
 
         private void InitializeFilterButtons()
@@ -75,13 +71,7 @@ namespace CinemaManagement.Forms.Kiosk
             btnExit.Click += (s, e) =>
             {
                 _timer?.Stop();
-                Form? mainForm = Application.OpenForms.Cast<Form>()
-                    .FirstOrDefault(f => f.Name == "FrmMain" || f.Name == "FrmRoleSelection" || f.Tag?.ToString() == "Main");
-                if (mainForm != null)
-                {
-                    mainForm.Show();
-                }
-                this.Close();
+                KioskFlow.ExitKiosk(this);
             };
 
             _timer = new System.Windows.Forms.Timer { Interval = 1000 };
@@ -93,46 +83,20 @@ namespace CinemaManagement.Forms.Kiosk
             _timer.Start();
         }
 
-        private void FilterMovies(string filterType)
+        private async void FilterMovies(string filterType)
         {
-            using var db = new CinemaDbContext();
-            var today = DateTime.Today;
-
-            IQueryable<Movie> query = db.Movies;
-
-            switch (filterType)
+            _currentFilter = filterType;
+            try
             {
-                case "Today":
-                    query = db.Showtimes
-                        .Where(st => st.StartTime.Date == today)
-                        .Select(st => st.Movie!)
-                        .Distinct();
-                    break;
-
-                case "IMAX":
-                    query = db.Showtimes
-                        .Include(st => st.Room)
-                        .Where(st => st.Room != null && st.Room.RoomName.Contains("IMAX"))
-                        .Select(st => st.Movie!)
-                        .Distinct();
-                    break;
-
-                case "Standard":
-                    query = db.Showtimes
-                        .Include(st => st.Room)
-                        .Where(st => st.Room == null || !st.Room.RoomName.Contains("IMAX"))
-                        .Select(st => st.Movie!)
-                        .Distinct();
-                    break;
-
-                case "All":
-                default:
-                    break;
+                LoadMovies(await _movieService.GetMoviesForKioskAsync(filterType));
             }
-
-            var movieList = query.ToList();
-            LoadMovies(movieList);
+            catch (Exception ex)
+            {
+                MessageBox.Show("Không tải được danh sách phim: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
+
+        public void ReloadMovies() => FilterMovies(_currentFilter);
 
         private void LoadMovies(List<Movie>? movies = null)
         {
@@ -143,8 +107,15 @@ namespace CinemaManagement.Forms.Kiosk
 
             if (movies == null)
             {
-                using var db = new CinemaDbContext();
-                movies = db.Movies.ToList();
+                try
+                {
+                    movies = _movieService.GetAll();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Không tải được danh sách phim: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    movies = new List<Movie>();
+                }
             }
 
             if (!movies.Any())
@@ -179,28 +150,7 @@ namespace CinemaManagement.Forms.Kiosk
                     BackColor = ColorTranslator.FromHtml("#262a2f")
                 };
 
-                string relativePath = movie.PosterPath ?? "";
-                if (!string.IsNullOrEmpty(relativePath))
-                {
-                    string cleanPath = relativePath.TrimStart('\\', '/');
-                    string path1 = Path.Combine(Application.StartupPath, cleanPath);
-                    string path2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", cleanPath);
-                    string path3 = Path.Combine(Directory.GetCurrentDirectory(), cleanPath);
-
-                    string finalPath = File.Exists(path1) ? path1 : (File.Exists(path2) ? path2 : (File.Exists(path3) ? path3 : ""));
-
-                    if (!string.IsNullOrEmpty(finalPath))
-                    {
-                        try
-                        {
-                            using (var stream = new FileStream(finalPath, FileMode.Open, FileAccess.Read))
-                            {
-                                picPoster.Image = Image.FromStream(stream);
-                            }
-                        }
-                        catch { }
-                    }
-                }
+                picPoster.Image = ImageHelper.Load(movie.PosterPath);
 
                 Label lblTitle = new Label
                 {
@@ -221,11 +171,10 @@ namespace CinemaManagement.Forms.Kiosk
                     AutoSize = true
                 };
 
-                var ageProp = movie.GetType().GetProperty("AgeRating") ?? movie.GetType().GetProperty("Rating");
-                string ageRating = ageProp?.GetValue(movie)?.ToString() ?? "T16";
+                string ageRating = string.IsNullOrWhiteSpace(movie.AgeRating) ? "P" : movie.AgeRating;
                 Label lblRating = new Label
                 {
-                    Text = $"{ageRating} • 8.8 ★",
+                    Text = $"Phân loại: {ageRating}",
                     Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                     ForeColor = ColorTranslator.FromHtml("#ffb961"),
                     Location = new Point(160, 125),

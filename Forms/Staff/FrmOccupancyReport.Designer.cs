@@ -24,7 +24,7 @@
             this.lnkPos = new System.Windows.Forms.LinkLabel();
             this.lblLogo = new System.Windows.Forms.Label();
             this.lblTitle = new System.Windows.Forms.Label();
-            this.btnSync = new System.Windows.Forms.Button();
+            this.btnToday = new System.Windows.Forms.Button();
             this.btnRefresh = new System.Windows.Forms.Button();
             this.btnExport = new System.Windows.Forms.Button();
             this.pnlFilter = new System.Windows.Forms.Panel();
@@ -59,7 +59,7 @@
             this.lblUser.Name = "lblUser";
             this.lblUser.Size = new System.Drawing.Size(107, 34);
             this.lblUser.TabIndex = 7;
-            this.lblUser.Text = "Julian Vance\r\nQuản Lý Trưởng";
+            this.lblUser.Text = "Người dùng\r\nVai trò";
 
             this.lnkOccupancy.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(125)))), ((int)(((byte)(211)))), ((int)(((byte)(252)))));
             this.lnkOccupancy.AutoSize = true;
@@ -134,16 +134,16 @@
             this.lblTitle.TabIndex = 1;
             this.lblTitle.Text = "FrmOccupancyReport — Hiệu Suất Lấp Đầy";
 
-            this.btnSync.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(24)))), ((int)(((byte)(28)))), ((int)(((byte)(32)))));
-            this.btnSync.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnSync.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold);
-            this.btnSync.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
-            this.btnSync.Location = new System.Drawing.Point(825, 18);
-            this.btnSync.Name = "btnSync";
-            this.btnSync.Size = new System.Drawing.Size(110, 30);
-            this.btnSync.TabIndex = 2;
-            this.btnSync.Text = "🟢 SQLite LIVE";
-            this.btnSync.UseVisualStyleBackColor = false;
+            this.btnToday.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(24)))), ((int)(((byte)(28)))), ((int)(((byte)(32)))));
+            this.btnToday.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnToday.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold);
+            this.btnToday.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(189)))), ((int)(((byte)(248)))));
+            this.btnToday.Location = new System.Drawing.Point(825, 18);
+            this.btnToday.Name = "btnToday";
+            this.btnToday.Size = new System.Drawing.Size(110, 30);
+            this.btnToday.TabIndex = 2;
+            this.btnToday.Text = "Hôm nay";
+            this.btnToday.UseVisualStyleBackColor = false;
 
             this.btnRefresh.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(24)))), ((int)(((byte)(28)))), ((int)(((byte)(32)))));
             this.btnRefresh.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -229,7 +229,7 @@
             this.Controls.Add(this.pnlFilter);
             this.Controls.Add(this.btnExport);
             this.Controls.Add(this.btnRefresh);
-            this.Controls.Add(this.btnSync);
+            this.Controls.Add(this.btnToday);
             this.Controls.Add(this.lblTitle);
             this.Controls.Add(this.pnlSidebar);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
@@ -252,7 +252,7 @@
         public System.Windows.Forms.LinkLabel lnkOccupancy;
         public System.Windows.Forms.Label lblUser;
         public System.Windows.Forms.Label lblTitle;
-        public System.Windows.Forms.Button btnSync;
+        public System.Windows.Forms.Button btnToday;
         public System.Windows.Forms.Button btnRefresh;
         public System.Windows.Forms.Button btnExport;
         public System.Windows.Forms.Panel pnlFilter;

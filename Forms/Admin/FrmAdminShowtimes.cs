@@ -1,11 +1,6 @@
-﻿using System;
-using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
-using CinemaManagement.Data;
+﻿using CinemaManagement.Helpers;
 using CinemaManagement.Models;
 using CinemaManagement.Services;
-using Microsoft.EntityFrameworkCore;
 
 namespace CinemaManagement.Forms.Admin
 {
@@ -27,16 +22,23 @@ namespace CinemaManagement.Forms.Admin
         private NumericUpDown _numPrice = null!;
         private Button _btnAddShowtime = null!;
         private Button _btnDeleteShowtime = null!;
+        private Button _btnUpdateShowtime = null!;
+        private Label _lblEditing = null!;
+        private CheckBox _chkShowPast = null!;
+        private int _editingShowtimeId;
+        private readonly ErrorProvider _errors = new() { BlinkStyle = ErrorBlinkStyle.NeverBlink };
 
         private readonly ShowtimeService _showtimeService;
 
         public FrmAdminShowtimes()
         {
             InitializeComponent();
+            AppSession.RequireAdmin(this);
             _showtimeService = new ShowtimeService();
             SetupCustomUI();
             LoadComboBoxData();
             LoadShowtimes();
+            WindowLayout.ApplyStandardSize(this);
         }
 
         private void SetupCustomUI()
@@ -99,6 +101,39 @@ namespace CinemaManagement.Forms.Admin
             _btnDeleteShowtime.FlatAppearance.BorderSize = 0;
             _btnDeleteShowtime.Click += OnDeleteShowtimeClick;
 
+            _btnUpdateShowtime = new Button
+            {
+                Text = "💾 Lưu thay đổi suất đang chọn",
+                Location = new Point(870, 80),
+                Size = new Size(290, 34),
+                BackColor = ColorTranslator.FromHtml("#334155"),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
+                Enabled = false
+            };
+            _btnUpdateShowtime.FlatAppearance.BorderSize = 0;
+            _btnUpdateShowtime.Click += OnUpdateShowtimeClick;
+
+            _lblEditing = new Label
+            {
+                Text = "Chọn 1 dòng trong bảng để sửa suất chiếu (suất đã bán vé chỉ được đổi giá).",
+                Location = new Point(20, 88),
+                AutoSize = true,
+                ForeColor = TextDim
+            };
+
+            _chkShowPast = new CheckBox
+            {
+                Text = "Hiện cả suất đã chiếu",
+                Location = new Point(620, 86),
+                AutoSize = true,
+                ForeColor = TextDim
+            };
+            _chkShowPast.CheckedChanged += (_, _) => LoadShowtimes();
+
+            pnlInput.Controls.AddRange(new Control[] { _btnUpdateShowtime, _lblEditing, _chkShowPast });
             pnlInput.Controls.AddRange(new Control[] { 
                 lblMovie, _cboMovies, lblRoom, _cboRooms, 
                 lblDate, _dtpStartDate, lblTime, _dtpStartTime, 
@@ -124,6 +159,7 @@ namespace CinemaManagement.Forms.Admin
             _dgvShowtimes.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
             _dgvShowtimes.RowTemplate.Height = 36;
 
+            _dgvShowtimes.SelectionChanged += OnGridSelectionChanged;
             Controls.Add(_dgvShowtimes);
             Controls.Add(pnlInput);
         }
@@ -132,15 +168,15 @@ namespace CinemaManagement.Forms.Admin
         {
             try
             {
-                using var db = new CinemaDbContext();
-
-                _cboMovies.DataSource = db.Movies.Select(m => new { m.MovieId, m.Title }).ToList();
+                _cboMovies.DataSource = new MovieService().GetAll().Select(m => new { m.MovieId, m.Title }).ToList();
                 _cboMovies.DisplayMember = "Title";
                 _cboMovies.ValueMember = "MovieId";
 
-                _cboRooms.DataSource = db.Rooms.Select(r => new { r.RoomId, r.RoomName }).ToList();
+                _cboRooms.DataSource = new RoomService().GetAll();
                 _cboRooms.DisplayMember = "RoomName";
                 _cboRooms.ValueMember = "RoomId";
+                _cboRooms.SelectedIndexChanged += OnRoomChanged;
+                OnRoomChanged(null, EventArgs.Empty);
             }
             catch (Exception ex)
             {
@@ -148,35 +184,59 @@ namespace CinemaManagement.Forms.Admin
             }
         }
 
+        private void OnRoomChanged(object? sender, EventArgs e)
+        {
+            if (_editingShowtimeId > 0 || _cboRooms.SelectedItem is not Room room) return;
+            _numPrice.Value = Math.Clamp(RoomTypes.SuggestedPrice(room.RoomType), _numPrice.Minimum, _numPrice.Maximum);
+        }
+
+        private sealed class ShowtimeRow
+        {
+            public int ShowtimeId { get; init; }
+            public string MovieTitle { get; init; } = "";
+            public string Duration { get; init; } = "";
+            public string RoomName { get; init; } = "";
+            public string StartTime { get; init; } = "";
+            public string EndTime { get; init; } = "";
+            public string Price { get; init; } = "";
+            public string Sold { get; init; } = "";
+        }
+
         private void LoadShowtimes()
         {
             try
             {
-                using var db = new CinemaDbContext();
-                var list = db.Showtimes
-                    .Include(s => s.Movie)
-                    .Include(s => s.Room)
-                    .OrderByDescending(s => s.StartTime)
-                    .Select(s => new
+                var list = _showtimeService.GetAllForAdmin(_chkShowPast.Checked)
+                    .Select(s => new ShowtimeRow
                     {
-                        s.ShowtimeId,
-                        MovieTitle = s.Movie != null ? s.Movie.Title : "N/A",
-                        Duration = s.Movie != null ? s.Movie.Duration + " phút" : "N/A",
-                        RoomName = s.Room != null ? s.Room.RoomName : "N/A",
+                        ShowtimeId = s.ShowtimeId,
+                        MovieTitle = s.MovieTitle,
+                        Duration = s.Duration + " phút",
+                        RoomName = s.RoomName,
                         StartTime = s.StartTime.ToString("dd/MM/yyyy HH:mm"),
-                        EndTime = s.EndTime.HasValue ? s.EndTime.Value.ToString("HH:mm") : "N/A",
-                        Price = s.Price.ToString("N0") + " VNĐ"
-                    }).ToList();
+                        EndTime = s.EndTime.ToString("HH:mm"),
+                        Price = s.Price.ToString("N0") + " VNĐ",
+                        Sold = $"{s.SoldSeats}/{s.TotalSeats}"
+                    })
+                    .ToList();
 
                 _dgvShowtimes.DataSource = list;
 
-                if (_dgvShowtimes.Columns["ShowtimeId"] != null) _dgvShowtimes.Columns["ShowtimeId"].HeaderText = "MÃ SUẤT";
-                if (_dgvShowtimes.Columns["MovieTitle"] != null) _dgvShowtimes.Columns["MovieTitle"].HeaderText = "TÊN PHIM";
-                if (_dgvShowtimes.Columns["Duration"] != null) _dgvShowtimes.Columns["Duration"].HeaderText = "THỜI LƯỢNG";
-                if (_dgvShowtimes.Columns["RoomName"] != null) _dgvShowtimes.Columns["RoomName"].HeaderText = "PHÒNG CHIẾU";
-                if (_dgvShowtimes.Columns["StartTime"] != null) _dgvShowtimes.Columns["StartTime"].HeaderText = "GIỜ BẮT ĐẦU";
-                if (_dgvShowtimes.Columns["EndTime"] != null) _dgvShowtimes.Columns["EndTime"].HeaderText = "GIỜ KẾT THÚC";
-                if (_dgvShowtimes.Columns["Price"] != null) _dgvShowtimes.Columns["Price"].HeaderText = "GIÁ VÉ";
+                void Header(string col, string text)
+                {
+                    if (_dgvShowtimes.Columns[col] != null) _dgvShowtimes.Columns[col]!.HeaderText = text;
+                }
+                Header("ShowtimeId", "MÃ SUẤT");
+                Header("MovieTitle", "TÊN PHIM");
+                Header("Duration", "THỜI LƯỢNG");
+                Header("RoomName", "PHÒNG CHIẾU");
+                Header("StartTime", "GIỜ BẮT ĐẦU");
+                Header("EndTime", "PHÒNG TRỐNG LÚC (gồm 15' dọn)");
+                Header("Price", "GIÁ VÉ");
+                Header("Sold", "ĐÃ BÁN");
+
+                _dgvShowtimes.ClearSelection();
+                ExitEditMode();
             }
             catch (Exception ex)
             {
@@ -184,11 +244,84 @@ namespace CinemaManagement.Forms.Admin
             }
         }
 
+        private void OnGridSelectionChanged(object? sender, EventArgs e)
+        {
+            if (_dgvShowtimes.SelectedRows.Count == 0 || _dgvShowtimes.SelectedRows[0].DataBoundItem is not ShowtimeRow row)
+            {
+                ExitEditMode();
+                return;
+            }
+
+            try
+            {
+                var st = _showtimeService.GetById(row.ShowtimeId);
+                if (st == null) return;
+
+                _editingShowtimeId = st.ShowtimeId;
+                _cboMovies.SelectedValue = st.MovieId;
+                _cboRooms.SelectedValue = st.RoomId;
+                _dtpStartDate.Value = st.StartTime.Date;
+                _dtpStartTime.Value = DateTime.Today.Add(st.StartTime.TimeOfDay);
+                _numPrice.Value = Math.Clamp(st.Price, _numPrice.Minimum, _numPrice.Maximum);
+
+                _btnUpdateShowtime.Enabled = true;
+                _btnUpdateShowtime.BackColor = Accent;
+                _lblEditing.Text = st.SoldSeats > 0
+                    ? $"Đang sửa suất #{st.ShowtimeId} - đã bán {st.SoldSeats} vé nên chỉ được đổi giá vé."
+                    : $"Đang sửa suất #{st.ShowtimeId}. Đổi phim/phòng/giờ sẽ được kiểm tra trùng lịch.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Không đọc được suất chiếu: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ExitEditMode()
+        {
+            _editingShowtimeId = 0;
+            if (_btnUpdateShowtime == null) return;
+            _btnUpdateShowtime.Enabled = false;
+            _btnUpdateShowtime.BackColor = ColorTranslator.FromHtml("#334155");
+            _lblEditing.Text = "Chọn 1 dòng trong bảng để sửa suất chiếu (suất đã bán vé chỉ được đổi giá).";
+        }
+
+        private void OnUpdateShowtimeClick(object? sender, EventArgs e)
+        {
+            if (_editingShowtimeId <= 0) return;
+            _errors.Clear();
+            if (_cboMovies.SelectedValue is not int movieId || _cboRooms.SelectedValue is not int roomId)
+            {
+                _errors.SetError(_cboMovies, "Chọn đầy đủ phim và phòng chiếu");
+                return;
+            }
+
+            DateTime start = _dtpStartDate.Value.Date.Add(_dtpStartTime.Value.TimeOfDay);
+            start = new DateTime(start.Year, start.Month, start.Day, start.Hour, start.Minute, 0);
+
+            try
+            {
+                _showtimeService.UpdateShowtime(_editingShowtimeId, movieId, roomId, start, _numPrice.Value);
+                MessageBox.Show("Cập nhật suất chiếu thành công!", "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                LoadShowtimes();
+            }
+            catch (BusinessException ex)
+            {
+                _errors.SetError(_dtpStartTime, ex.Message);
+                MessageBox.Show(ex.Message, "Không thể cập nhật", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi cập nhật suất chiếu: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void OnAddShowtimeClick(object? sender, EventArgs e)
         {
+            _errors.Clear();
             if (_cboMovies.SelectedValue == null || _cboRooms.SelectedValue == null)
             {
-                MessageBox.Show("Vui lòng chọn đầy đủ Phim và Phòng chiếu!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (_cboMovies.SelectedValue == null) _errors.SetError(_cboMovies, "Chưa chọn phim");
+                if (_cboRooms.SelectedValue == null) _errors.SetError(_cboRooms, "Chưa chọn phòng chiếu");
                 return;
             }
 
@@ -197,20 +330,23 @@ namespace CinemaManagement.Forms.Admin
 
             DateTime selectedDate = _dtpStartDate.Value.Date;
             TimeSpan selectedTime = _dtpStartTime.Value.TimeOfDay;
-            DateTime fullStartTime = selectedDate.Add(selectedTime);
-
+            DateTime fullStartTime = selectedDate.Add(new TimeSpan(selectedTime.Hours, selectedTime.Minutes, 0));
             decimal price = _numPrice.Value;
 
-            var result = _showtimeService.AddShowtime(movieId, roomId, fullStartTime, price);
-
-            if (result.Success)
+            try
             {
-                MessageBox.Show(result.Message, "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                _showtimeService.AddShowtime(movieId, roomId, fullStartTime, price);
+                MessageBox.Show("Thêm suất chiếu thành công!", "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 LoadShowtimes();
             }
-            else
+            catch (BusinessException ex)
             {
-                MessageBox.Show(result.Message, "Cảnh báo xung đột", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _errors.SetError(_dtpStartTime, ex.Message);
+                MessageBox.Show(ex.Message, "Cảnh báo xung đột", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi thêm suất chiếu: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -222,20 +358,25 @@ namespace CinemaManagement.Forms.Admin
                 return;
             }
 
-            int showtimeId = Convert.ToInt32(_dgvShowtimes.SelectedRows[0].Cells["ShowtimeId"].Value);
+            if (_dgvShowtimes.SelectedRows[0].DataBoundItem is not ShowtimeRow selectedRow) return;
+            int showtimeId = selectedRow.ShowtimeId;
 
             var confirm = MessageBox.Show($"Bạn có chắc chắn muốn xóa suất chiếu mã #{showtimeId}?", "Xác nhận xóa", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (confirm == DialogResult.Yes)
             {
-                var result = _showtimeService.DeleteShowtime(showtimeId);
-                if (result.Success)
+                try
                 {
-                    MessageBox.Show(result.Message, "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _showtimeService.DeleteShowtime(showtimeId);
+                    MessageBox.Show("Đã xóa suất chiếu thành công.", "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     LoadShowtimes();
                 }
-                else
+                catch (BusinessException ex)
                 {
-                    MessageBox.Show(result.Message, "Lỗi xóa", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(ex.Message, "Không thể xóa", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Lỗi xóa suất chiếu: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }

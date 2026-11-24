@@ -1,117 +1,202 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using CinemaManagement.Data;
 using CinemaManagement.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace CinemaManagement.Services
 {
+    public class ShowtimeListItemDto
+    {
+        public int ShowtimeId { get; set; }
+        public int MovieId { get; set; }
+        public int RoomId { get; set; }
+        public string MovieTitle { get; set; } = string.Empty;
+        public int Duration { get; set; }
+        public string RoomName { get; set; } = string.Empty;
+        public string RoomType { get; set; } = string.Empty;
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
+        public decimal Price { get; set; }
+        public int TotalSeats { get; set; }
+        public int SoldSeats { get; set; }
+        public int HeldSeats { get; set; }
+        public int AvailableSeats => Math.Max(0, TotalSeats - SoldSeats - HeldSeats);
+    }
+
     public class ShowtimeService
     {
-        private const int CLEANING_BUFFER_MINUTES = 15; // Thời gian dọn dẹp phòng giữa 2 suất chiếu
+        public const int CleaningBufferMinutes = 15;
 
-        /// <summary>
-        /// Kiểm tra suất chiếu mới có bị trùng thời gian với các suất chiếu đã có trong cùng phòng hay không.
-        /// </summary>
-        public (bool IsOverlapping, string Message) CheckShowtimeOverlap(int roomId, DateTime startTime, int movieDurationMinutes, int? ignoreShowtimeId = null)
+        public const int SellUntilMinutesAfterStart = 15;
+
+        public const int SalesWindowDays = 4;
+
+        public static DateTime CalculateEndTime(DateTime startTime, int movieDurationMinutes)
+            => startTime.AddMinutes(movieDurationMinutes + CleaningBufferMinutes);
+
+        private static void EnsureNoOverlap(
+            CinemaDbContext db, int roomId, DateTime newStart, DateTime newEnd, int? ignoreShowtimeId)
         {
-            DateTime endTimeWithBuffer = startTime.AddMinutes(movieDurationMinutes + CLEANING_BUFFER_MINUTES);
-
-            using var db = new CinemaDbContext();
-            
-            var existingShowtimes = db.Showtimes
+            int ignoreId = ignoreShowtimeId ?? 0;
+            var conflict = db.Showtimes
+                .AsNoTracking()
                 .Include(s => s.Movie)
-                .Where(s => s.RoomId == roomId)
-                .ToList();
+                .Where(s => s.RoomId == roomId
+                            && s.ShowtimeId != ignoreId
+                            && s.StartTime < newEnd
+                            && s.EndTime > newStart)
+                .OrderBy(s => s.StartTime)
+                .FirstOrDefault();
 
-            if (ignoreShowtimeId.HasValue)
-            {
-                existingShowtimes = existingShowtimes.Where(s => s.ShowtimeId != ignoreShowtimeId.Value).ToList();
-            }
+            if (conflict == null) return;
 
-            foreach (var st in existingShowtimes)
-            {
-                int existingDuration = st.Movie?.Duration ?? 120;
-                DateTime existingEndWithBuffer = (st.EndTime ?? st.StartTime.AddMinutes(existingDuration)).AddMinutes(CLEANING_BUFFER_MINUTES);
-
-                // Kiểm tra sự chồng lấp khoảng thời gian
-                bool overlap = startTime < existingEndWithBuffer && endTimeWithBuffer > st.StartTime;
-
-                if (overlap)
-                {
-                    string movieTitle = st.Movie?.Title ?? "Chưa rõ";
-                    string msg = $"Trùng lịch chiếu! Phòng này đã có phim '{movieTitle}' từ {st.StartTime:HH:mm} đến {st.EndTime:HH:mm} (bao gồm 15 phút dọn phòng).";
-                    return (true, msg);
-                }
-            }
-
-            return (false, string.Empty);
+            throw new BusinessException($"Trùng lịch chiếu! Phòng này đã có phim '{conflict.Movie.Title}' " +
+                         $"từ {conflict.StartTime:HH:mm} đến {conflict.EndTime:HH:mm} ngày {conflict.StartTime:dd/MM} " +
+                         $"(đã gồm {CleaningBufferMinutes} phút dọn phòng).");
         }
 
-        /// <summary>
-        /// Tạo mới suất chiếu
-        /// </summary>
-        public (bool Success, string Message) AddShowtime(int movieId, int roomId, DateTime startTime, decimal price)
+        public void AddShowtime(int movieId, int roomId, DateTime startTime, decimal price)
         {
-            using var db = new CinemaDbContext();
+            using var db = DbFactory.Create();
 
             var movie = db.Movies.Find(movieId);
-            if (movie == null) return (false, "Không tìm thấy bộ phim được chọn.");
+            if (movie == null) throw new BusinessException("Không tìm thấy bộ phim được chọn.");
+            if (db.Rooms.Find(roomId) == null) throw new BusinessException("Không tìm thấy phòng chiếu được chọn.");
+            if (!db.Seats.Any(s => s.RoomId == roomId)) throw new BusinessException("Phòng chiếu chưa có sơ đồ ghế.");
+            if (price <= 0) throw new BusinessException("Giá vé phải lớn hơn 0.");
+            if (startTime <= DateTime.Now) throw new BusinessException("Thời gian bắt đầu suất chiếu phải ở tương lai.");
 
-            var room = db.Rooms.Find(roomId);
-            if (room == null) return (false, "Không tìm thấy phòng chiếu được chọn.");
+            DateTime endTime = CalculateEndTime(startTime, movie.Duration);
+            EnsureNoOverlap(db, roomId, startTime, endTime, null);
 
-            if (startTime <= DateTime.Now)
-            {
-                return (false, "Thời gian bắt đầu suất chiếu phải ở tương lai.");
-            }
-
-            var overlapCheck = CheckShowtimeOverlap(roomId, startTime, movie.Duration);
-            if (overlapCheck.IsOverlapping)
-            {
-                return (false, overlapCheck.Message);
-            }
-
-            DateTime endTime = startTime.AddMinutes(movie.Duration);
-
-            var showtime = new Showtime
+            db.Showtimes.Add(new Showtime
             {
                 MovieId = movieId,
                 RoomId = roomId,
                 StartTime = startTime,
                 EndTime = endTime,
                 Price = price
-            };
-
-            db.Showtimes.Add(showtime);
+            });
             db.SaveChanges();
-
-            return (true, "Thêm suất chiếu thành công!");
         }
 
-        /// <summary>
-        /// Xóa suất chiếu
-        /// </summary>
-        public (bool Success, string Message) DeleteShowtime(int showtimeId)
+        public void UpdateShowtime(int showtimeId, int movieId, int roomId, DateTime startTime, decimal price)
         {
-            using var db = new CinemaDbContext();
+            using var db = DbFactory.Create();
 
-            var showtime = db.Showtimes
-                .Include(s => s.Tickets)
-                .FirstOrDefault(s => s.ShowtimeId == showtimeId);
+            var showtime = db.Showtimes.Find(showtimeId);
+            if (showtime == null) throw new BusinessException("Suất chiếu không tồn tại.");
 
-            if (showtime == null) return (false, "Suất chiếu không tồn tại.");
+            var movie = db.Movies.Find(movieId);
+            if (movie == null) throw new BusinessException("Không tìm thấy bộ phim được chọn.");
+            if (db.Rooms.Find(roomId) == null) throw new BusinessException("Không tìm thấy phòng chiếu được chọn.");
+            if (price <= 0) throw new BusinessException("Giá vé phải lớn hơn 0.");
 
-            if (showtime.Tickets != null && showtime.Tickets.Any())
+            bool scheduleChanged = showtime.MovieId != movieId
+                                   || showtime.RoomId != roomId
+                                   || showtime.StartTime != startTime;
+
+            if (scheduleChanged)
             {
-                return (false, "Không thể xóa suất chiếu này vì đã có vé được bán ra!");
+                if (db.Tickets.Any(t => t.ShowtimeId == showtimeId))
+                    throw new BusinessException("Suất chiếu đã có vé bán ra nên chỉ được đổi giá vé, không được đổi phim, phòng hoặc giờ chiếu.");
+                if (startTime <= DateTime.Now)
+                    throw new BusinessException("Thời gian bắt đầu suất chiếu phải ở tương lai.");
+
+                DateTime endTime = CalculateEndTime(startTime, movie.Duration);
+                EnsureNoOverlap(db, roomId, startTime, endTime, showtimeId);
+
+                showtime.MovieId = movieId;
+                showtime.RoomId = roomId;
+                showtime.StartTime = startTime;
+                showtime.EndTime = endTime;
             }
 
+            showtime.Price = price;
+            db.SaveChanges();
+        }
+
+        public void DeleteShowtime(int showtimeId)
+        {
+            using var db = DbFactory.Create();
+
+            var showtime = db.Showtimes.Find(showtimeId);
+            if (showtime == null) throw new BusinessException("Suất chiếu không tồn tại.");
+
+            if (db.Tickets.Any(t => t.ShowtimeId == showtimeId) || db.Bookings.Any(b => b.ShowtimeId == showtimeId))
+                throw new BusinessException("Không thể xóa suất chiếu này vì đã có vé được bán ra!");
+
+            db.SeatHolds.RemoveRange(db.SeatHolds.Where(h => h.ShowtimeId == showtimeId));
             db.Showtimes.Remove(showtime);
             db.SaveChanges();
+        }
 
-            return (true, "Đã xóa suất chiếu thành công.");
+        public ShowtimeListItemDto? GetById(int showtimeId)
+            => Query(s => s.ShowtimeId == showtimeId).FirstOrDefault();
+
+        public List<ShowtimeListItemDto> GetAllForAdmin(bool includePast)
+        {
+            if (includePast)
+                return Query(_ => true).OrderByDescending(s => s.StartTime).ToList();
+
+            DateTime today = DateTime.Today;
+            return Query(s => s.StartTime >= today).OrderBy(s => s.StartTime).ToList();
+        }
+
+        public List<ShowtimeListItemDto> GetShowtimesForMovie(int movieId, DateTime date, string format = "All")
+        {
+            DateTime from = date.Date;
+            DateTime to = from.AddDays(1);
+            var list = Query(s => s.MovieId == movieId && s.StartTime >= from && s.StartTime < to);
+
+            if (format == "IMAX")
+                list = list.Where(s => IsImax(s)).ToList();
+            else if (format == "Standard")
+                list = list.Where(s => !IsImax(s)).ToList();
+
+            return list.OrderBy(s => s.StartTime).ToList();
+        }
+
+        public List<ShowtimeListItemDto> GetSellableShowtimes()
+        {
+            DateTime cutoff = DateTime.Now.AddMinutes(-SellUntilMinutesAfterStart);
+            DateTime until = DateTime.Today.AddDays(SalesWindowDays);
+            return Query(s => s.StartTime > cutoff && s.StartTime < until)
+                .OrderBy(s => s.StartTime)
+                .ToList();
+        }
+
+        public static bool IsSellable(DateTime startTime)
+            => DateTime.Now <= startTime.AddMinutes(SellUntilMinutesAfterStart);
+
+        private static bool IsImax(ShowtimeListItemDto s)
+            => s.RoomType.Contains("IMAX", StringComparison.OrdinalIgnoreCase)
+               || s.RoomName.Contains("IMAX", StringComparison.OrdinalIgnoreCase);
+
+        private static List<ShowtimeListItemDto> Query(System.Linq.Expressions.Expression<Func<Showtime, bool>> predicate)
+        {
+            using var db = DbFactory.Create();
+            DateTime now = DateTime.Now;
+
+            return db.Showtimes
+                .AsNoTracking()
+                .Where(predicate)
+                .Select(s => new ShowtimeListItemDto
+                {
+                    ShowtimeId = s.ShowtimeId,
+                    MovieId = s.MovieId,
+                    RoomId = s.RoomId,
+                    MovieTitle = s.Movie.Title,
+                    Duration = s.Movie.Duration,
+                    RoomName = s.Room.RoomName,
+                    RoomType = s.Room.RoomType,
+                    StartTime = s.StartTime,
+                    EndTime = s.EndTime,
+                    Price = s.Price,
+                    TotalSeats = s.Room.Seats.Count(),
+                    SoldSeats = s.Tickets.Count(),
+                    HeldSeats = s.SeatHolds.Count(h => h.ExpiresAt > now)
+                })
+                .ToList();
         }
     }
 }

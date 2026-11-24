@@ -1,97 +1,51 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Windows.Forms;
+﻿using CinemaManagement.Helpers;
+using CinemaManagement.Models;
+using CinemaManagement.Services;
 
 namespace CinemaManagement.Forms.Kiosk;
 
 public partial class FrmKioskSuccess : Form
     {
-        private readonly int _bookingId;
-        private readonly string _movieTitle;
-        private readonly string _showtimeInfo;
-        private readonly List<string> _seats;
-        private readonly decimal _totalAmount;
-        private readonly string _paymentMethod;
+        private readonly BookingReceipt _receipt;
 
-        private System.Windows.Forms.Timer _clockTimer;
-        private System.Windows.Forms.Timer _redirectTimer;
-        private int _secondsLeft = 15;
+        private System.Windows.Forms.Timer _clockTimer = null!;
+        private System.Windows.Forms.Timer _redirectTimer = null!;
+        private int _secondsLeft = 30;
 
-        public FrmKioskSuccess(
-            int bookingId,
-            string movieTitle,
-            string showtimeInfo,
-            List<string> seats,
-            decimal totalAmount,
-            string paymentMethod)
+        public FrmKioskSuccess(BookingReceipt receipt)
         {
-            _bookingId = bookingId;
-            _movieTitle = movieTitle;
-            _showtimeInfo = showtimeInfo;
-            _seats = seats ?? new List<string>();
-            _totalAmount = totalAmount;
-            _paymentMethod = paymentMethod;
+            _receipt = receipt;
 
             InitializeComponent();
             RenderTicketData();
             RegisterEvents();
+            WindowLayout.ScaleToScreen(this);
         }
 
         private void RenderTicketData()
         {
-            string ticketCode = $"CLX-{DateTime.Now:yyyyMMdd}-{_bookingId:D4}";
-            lblTicketCode.Text = $"MÃ VÉ ĐIỆN TỬ: {ticketCode}";
+            lblTicketCode.Text = $"MÃ ĐẶT VÉ: {_receipt.BookingCode}";
 
-            string statusText = _paymentMethod == "COUNTER_CASH"
-                ? "Chờ thanh toán tại quầy (Vui lòng thanh toán trong 15 phút)"
-                : "Đã thanh toán thành công";
+            string combos = _receipt.Combos.Any()
+                ? "\nBắp nước: " + string.Join(", ", _receipt.Combos.Select(c => $"{c.ComboName} x{c.Quantity}"))
+                : string.Empty;
 
             lblTicketDetails.Text =
-                $"Phim: {_movieTitle.ToUpper()}\n" +
-                $"Suất chiếu: {_showtimeInfo}\n" +
-                $"Ghế đã đặt: {string.Join(", ", _seats)}\n" +
-                $"Tổng thanh toán: {_totalAmount:N0} VNĐ\n" +
-                $"Trạng thái: {statusText}";
-            
-            picTicketQr.Image = GenerateMockQrBitmap(ticketCode, 230);
-        }
+                $"Phim: {_receipt.MovieTitle.ToUpper()}\n" +
+                $"Suất chiếu: {_receipt.RoomName} | {_receipt.StartTime:HH:mm dd/MM/yyyy}\n" +
+                $"Ghế: {_receipt.SeatList}{combos}\n" +
+                $"Tổng thanh toán: {_receipt.TotalAmount:N0} VNĐ ({PaymentMethods.ToDisplay(_receipt.PaymentMethod)})\n" +
+                "Trạng thái: Đã thanh toán thành công";
 
-        private Bitmap GenerateMockQrBitmap(string seedText, int size)
-        {
-            Bitmap bmp = new Bitmap(size, size);
-            using Graphics g = Graphics.FromImage(bmp);
-            g.Clear(Color.White);
-
-            int grid = 21;
-            int cellSize = size / grid;
-            int hash = seedText.GetHashCode();
-            Random rng = new Random(hash);
-
-            for (int r = 0; r < grid; r++)
+            try
             {
-                for (int c = 0; c < grid; c++)
-                {
-                    bool isTopLeft = r < 7 && c < 7;
-                    bool isTopRight = r < 7 && c >= grid - 7;
-                    bool isBottomLeft = r >= grid - 7 && c < 7;
-
-                    if (isTopLeft || isTopRight || isBottomLeft)
-                    {
-                        int lr = isBottomLeft ? r - (grid - 7) : r;
-                        int lc = isTopRight ? c - (grid - 7) : c;
-                        bool isBorder = lr == 0 || lr == 6 || lc == 0 || lc == 6;
-                        bool isCenter = lr >= 2 && lr <= 4 && lc >= 2 && lc <= 4;
-                        if (isBorder || isCenter)
-                            g.FillRectangle(Brushes.Black, c * cellSize, r * cellSize, cellSize, cellSize);
-                    }
-                    else if (rng.Next(0, 2) == 1)
-                    {
-                        g.FillRectangle(Brushes.Black, c * cellSize, r * cellSize, cellSize, cellSize);
-                    }
-                }
+                picTicketQr.SizeMode = PictureBoxSizeMode.Zoom;
+                picTicketQr.Image = QrHelper.Generate(_receipt.QrPayload, 8);
             }
-            return bmp;
+            catch (Exception ex)
+            {
+                lblTicketDetails.Text += "\n(Không tạo được mã QR: " + ex.Message + ")";
+            }
         }
 
         private void RegisterEvents()
@@ -133,9 +87,6 @@ public partial class FrmKioskSuccess : Form
             _clockTimer?.Stop();
             _redirectTimer?.Stop();
 
-            var home = new FrmKioskHome();
-            home.TopMost = true;
-            home.Show();
-            this.Close();
+            KioskFlow.ReturnHome(this);
         }
     }

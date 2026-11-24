@@ -1,52 +1,34 @@
-﻿using System;
 using CinemaManagement.Models;
-using CinemaManagement.Data;
 
 namespace CinemaManagement.Services
 {
     public class PaymentService
     {
-        /// <summary>
-        /// Xử lý tính toán tiền thừa cho giao dịch
-        /// </summary>
         public decimal CalculateChange(decimal totalAmount, decimal cashGiven)
         {
             if (cashGiven < totalAmount)
-            {
-                throw new InvalidOperationException("Số tiền khách đưa không đủ để thanh toán.");
-            }
+                throw new BusinessException(
+                    $"Số tiền khách đưa ({cashGiven:N0} đ) chưa đủ để thanh toán {totalAmount:N0} đ.");
             return cashGiven - totalAmount;
         }
 
-        /// <summary>
-        /// Thực hiện giao dịch thanh toán giả lập (luôn thành công) và lưu vào CSDL
-        /// </summary>
-        public bool ProcessPayment(int bookingId, decimal totalAmount, decimal cashGiven, string paymentMethod = "Tiền mặt")
+        public Payment Process(decimal totalAmount, string paymentMethod, decimal cashGiven)
         {
-            try
-            {
-                decimal change = CalculateChange(totalAmount, cashGiven);
+            if (totalAmount <= 0)
+                throw new BusinessException("Tổng tiền thanh toán không hợp lệ.");
 
-                using var context = new CinemaDbContext();
-                var payment = new Payment
-                {
-                    BookingId = bookingId,
-                    Amount = totalAmount,
-                    CashGiven = cashGiven,
-                    ChangeReturned = change,
-                    PaymentMethod = paymentMethod,
-                    Status = "Success",
-                    PaymentDate = DateTime.Now
-                };
+            decimal given = paymentMethod == PaymentMethods.Cash ? cashGiven : totalAmount;
+            decimal change = CalculateChange(totalAmount, given);
 
-                context.Payments.Add(payment);
-                context.SaveChanges();
-                return true;
-            }
-            catch (Exception ex)
+            return new Payment
             {
-                throw new Exception("Lỗi xử lý thanh toán: " + ex.Message);
-            }
+                Amount = totalAmount,
+                CashGiven = given,
+                ChangeReturned = change,
+                PaymentMethod = paymentMethod,
+                Status = PaymentStatus.Success,
+                PaymentDate = DateTime.Now
+            };
         }
     }
 }

@@ -37,7 +37,7 @@
             this.lblStaffCount = new System.Windows.Forms.Label();
             this.lblCardTitle3 = new System.Windows.Forms.Label();
             this.pnlCard4 = new System.Windows.Forms.Panel();
-            this.lblCustomerCount = new System.Windows.Forms.Label();
+            this.lblLockedCount = new System.Windows.Forms.Label();
             this.lblCardTitle4 = new System.Windows.Forms.Label();
             this.dgvUsers = new System.Windows.Forms.DataGridView();
             this.colId = new System.Windows.Forms.DataGridViewTextBoxColumn();
@@ -262,21 +262,21 @@
             this.lblCardTitle3.Text = "NHÂN VIÊN TRỰC CA (STAFF)";
 
             this.pnlCard4.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(16)))), ((int)(((byte)(20)))), ((int)(((byte)(24)))));
-            this.pnlCard4.Controls.Add(this.lblCustomerCount);
+            this.pnlCard4.Controls.Add(this.lblLockedCount);
             this.pnlCard4.Controls.Add(this.lblCardTitle4);
             this.pnlCard4.Location = new System.Drawing.Point(990, 130);
             this.pnlCard4.Name = "pnlCard4";
             this.pnlCard4.Size = new System.Drawing.Size(260, 75);
             this.pnlCard4.TabIndex = 5;
 
-            this.lblCustomerCount.AutoSize = true;
-            this.lblCustomerCount.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold);
-            this.lblCustomerCount.ForeColor = System.Drawing.Color.White;
-            this.lblCustomerCount.Location = new System.Drawing.Point(15, 30);
-            this.lblCustomerCount.Name = "lblCustomerCount";
-            this.lblCustomerCount.Size = new System.Drawing.Size(25, 30);
-            this.lblCustomerCount.TabIndex = 1;
-            this.lblCustomerCount.Text = "0";
+            this.lblLockedCount.AutoSize = true;
+            this.lblLockedCount.Font = new System.Drawing.Font("Segoe UI", 16F, System.Drawing.FontStyle.Bold);
+            this.lblLockedCount.ForeColor = System.Drawing.Color.White;
+            this.lblLockedCount.Location = new System.Drawing.Point(15, 30);
+            this.lblLockedCount.Name = "lblLockedCount";
+            this.lblLockedCount.Size = new System.Drawing.Size(25, 30);
+            this.lblLockedCount.TabIndex = 1;
+            this.lblLockedCount.Text = "0";
 
             this.lblCardTitle4.AutoSize = true;
             this.lblCardTitle4.Font = new System.Drawing.Font("Segoe UI", 8.5F);
@@ -285,7 +285,7 @@
             this.lblCardTitle4.Name = "lblCardTitle4";
             this.lblCardTitle4.Size = new System.Drawing.Size(110, 15);
             this.lblCardTitle4.TabIndex = 0;
-            this.lblCardTitle4.Text = "HỘI VIÊN (CUSTOMERS)";
+            this.lblCardTitle4.Text = "TÀI KHOẢN ĐANG KHÓA";
 
             this.dgvUsers.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dgvUsers.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
@@ -390,7 +390,7 @@
         public System.Windows.Forms.Label lblStaffCount;
         public System.Windows.Forms.Panel pnlCard4;
         public System.Windows.Forms.Label lblCardTitle4;
-        public System.Windows.Forms.Label lblCustomerCount;
+        public System.Windows.Forms.Label lblLockedCount;
         public System.Windows.Forms.DataGridView dgvUsers;
         public System.Windows.Forms.DataGridViewTextBoxColumn colId;
         public System.Windows.Forms.DataGridViewTextBoxColumn colUsername;

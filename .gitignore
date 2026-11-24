@@ -1,9 +1,10 @@
-# .NET Core / Visual Studio / Rider Ignore File
+# .NET / Rider
 bin/
 obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+.idea/
 .vs/
 *.user
 *.suo
@@ -12,3 +13,11 @@ riderModule.iml
 .vscode/
 artifacts/
 .artifacts/
+
+# CSDL cục bộ của từng thành viên (dữ liệu chung lấy từ DbInitializer)
+*.db
+*.db-shm
+*.db-wal
+
+# Cau hinh NuGet rieng cua tung may
+nuget.config

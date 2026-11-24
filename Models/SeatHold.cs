@@ -1,4 +1,3 @@
-﻿using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -11,17 +10,18 @@ namespace CinemaManagement.Models
 
         public int ShowtimeId { get; set; }
 
-        [ForeignKey("ShowtimeId")]
-        public virtual Showtime Showtime { get; set; } 
+        [ForeignKey(nameof(ShowtimeId))]
+        public virtual Showtime Showtime { get; set; } = null!;
 
         public int SeatId { get; set; }
 
-        [ForeignKey("SeatId")]
-        public virtual Seat Seat { get; set; } 
+        [ForeignKey(nameof(SeatId))]
+        public virtual Seat Seat { get; set; } = null!;
 
-        public DateTime ExpiresAt { get; set; } 
+        public DateTime ExpiresAt { get; set; }
 
+        [Required]
         [StringLength(100)]
-        public string SessionId { get; set; } 
+        public string SessionId { get; set; } = string.Empty;
     }
 }

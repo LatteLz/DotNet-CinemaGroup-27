@@ -1,142 +1,109 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data.SQLite;
-using System.Drawing;
-using System.Windows.Forms;
-using CinemaManagement.Forms.Staff;
+﻿using System.Text;
+using CinemaManagement.Forms.Shared;
+using CinemaManagement.Helpers;
+using CinemaManagement.Services;
 
 namespace CinemaManagement.Forms.Staff
 {
     public partial class FrmOccupancyReport : Form
     {
-        private readonly string connectionString = "Data Source=cinema.db;Version=3;";
         private readonly Color ColorTextWhite = Color.White;
         private readonly Color ColorTextMuted = ColorTranslator.FromHtml("#94a3b8");
         private readonly Color ColorCyan = ColorTranslator.FromHtml("#38bdf8");
         private readonly Color ColorAmber = ColorTranslator.FromHtml("#f59e0b");
         private readonly Color ColorRed = ColorTranslator.FromHtml("#ef4444");
 
-        private ComboBox cmbRooms;
-        private ComboBox cmbHours;
-        private TrackBar trkMinRate;
-        private Label lblRateValue;
-        private DateTimePicker dtpReportDate;
+        private readonly ReportService _reportService = new();
+        private readonly RoomService _roomService = new();
+
+        private ComboBox cmbRooms = null!;
+        private ComboBox cmbHours = null!;
+        private TrackBar trkMinRate = null!;
+        private Label lblRateValue = null!;
+        private DateTimePicker dtpReportDate = null!;
         private ErrorProvider errorProvider = new ErrorProvider();
+        private readonly ToolTip _cellToolTip = new ToolTip();
+
+        private List<ShowtimeOccupancyReportDto> _dayData = new();
 
         public FrmOccupancyReport()
         {
             InitializeComponent();
+            AppSession.RequireAdmin(this);
             SetupSidebarEvents();
             SetupActionButtons();
+            PopulateFilterBar();
             LoadRealDataFromDatabase();
+            WindowLayout.ScaleToStandard(this);
         }
 
         private void SetupSidebarEvents()
         {
-            if (lnkPos != null)
-            {
-                lnkPos.LinkClicked += (s, e) => {
-                    var posForm = new FrmStaffPOS();
-                    posForm.Show();
-                    this.Hide();
-                };
-            }
-
-            if (lnkCombo != null)
-            {
-                lnkCombo.LinkClicked += (s, e) => {
-                    var comboForm = new FrmAdminCombos();
-                    comboForm.Show();
-                    this.Hide();
-                };
-            }
-
-            if (lnkUsers != null)
-            {
-                lnkUsers.LinkClicked += (s, e) => {
-                    var usersForm = new FrmAdminUsers();
-                    usersForm.Show();
-                    this.Hide();
-                };
-            }
-
-            if (lnkReports != null)
-            {
-                lnkReports.LinkClicked += (s, e) => {
-                    var reportsForm = new FrmAdminReports();
-                    reportsForm.Show();
-                    this.Hide();
-                };
-            }
-
-            if (lnkOccupancy != null)
-            {
-                lnkOccupancy.LinkClicked += (s, e) => {
-                };
-            }
+            if (lblUser != null) lblUser.Text = $"{AppSession.DisplayName}\r\n{AppSession.CurrentUser?.Role}";
+            if (lnkPos != null) lnkPos.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmStaffPOS>(this);
+            if (lnkCombo != null) lnkCombo.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmAdminCombos>(this);
+            if (lnkReports != null) lnkReports.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmAdminReports>(this);
+            if (lnkUsers != null) lnkUsers.LinkClicked += (s, e) => StaffNavigator.Navigate<FrmAdminUsers>(this);
         }
 
         private void SetupActionButtons()
         {
-            if (btnSync != null)
+            if (btnToday != null)
             {
-                btnSync.Click += (s, e) => {
+                btnToday.Click += (s, e) =>
+                {
                     errorProvider.Clear();
-                    MessageBox.Show("Kết nối SQLite LIVE tới 'cinema.db' đang hoạt động ổn định và đồng bộ thời gian thực.", "Trạng Thái DB", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    dtpReportDate.Value = DateTime.Today;
                 };
             }
 
             if (btnRefresh != null)
             {
-                btnRefresh.Click += (s, e) => {
+                btnRefresh.Click += (s, e) =>
+                {
                     errorProvider.Clear();
                     LoadRealDataFromDatabase();
-                    MessageBox.Show("Đã làm mới và đồng bộ lại toàn bộ dữ liệu từ cơ sở dữ liệu!", "Làm Mới", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 };
             }
 
             if (btnExport != null)
             {
-                btnExport.Click += (s, e) => {
-                    if (dtpReportDate != null && dtpReportDate.Value > DateTime.Now)
+                btnExport.Click += (s, e) =>
+                {
+                    var rows = GetFilteredRows();
+                    if (rows.Count == 0)
                     {
-                        errorProvider.SetError(btnExport, "Không thể xuất báo cáo cho ngày trong tương lai!");
-                        MessageBox.Show("Ngày báo cáo không hợp lệ (vượt quá thời gian hiện tại).", "Cảnh Báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        errorProvider.SetError(btnExport, "Không có dữ liệu để xuất!");
+                        MessageBox.Show("Không có suất chiếu nào phù hợp bộ lọc để xuất.", "Cảnh Báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
                     errorProvider.SetError(btnExport, string.Empty);
 
-                    using (SaveFileDialog sfd = new SaveFileDialog())
+                    using var sfd = new SaveFileDialog
                     {
-                        sfd.Filter = "CSV File (*.csv)|*.csv|Excel Spreadsheet (*.xlsx)|*.xlsx";
-                        sfd.FileName = "Occupancy_Report_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv";
-                        if (sfd.ShowDialog() == DialogResult.OK)
+                        Filter = "CSV File (*.csv)|*.csv",
+                        FileName = $"Occupancy_Report_{dtpReportDate.Value:yyyyMMdd}.csv"
+                    };
+                    if (sfd.ShowDialog() != DialogResult.OK) return;
+
+                    try
+                    {
+                        var sb = new StringBuilder();
+                        sb.AppendLine("Ngay,Phong,Gio chieu,Phim,Ve da ban,Tong ghe,Ty le lap day,Danh gia");
+                        foreach (var r in rows)
                         {
-                            try
-                            {
-                                string csvContent = "Auditorium,09:00,11:30,14:00,16:30,19:00,21:30,23:45\n" +
-                                                    "Room 01 (IMAX),64%,78%,89%,92%,98%,95%,58%\n" +
-                                                    "Room 02 (Standard),38%,60%,71%,86%,100%,94%,0%\n" +
-                                                    "Room 03 (VIP Suite),42%,68%,75%,88%,96%,90%,62%";
-                                System.IO.File.WriteAllText(sfd.FileName, csvContent);
-                                MessageBox.Show("Xuất báo cáo ma trận lấp đầy thành công!\nĐường dẫn: " + sfd.FileName, "Xuất File", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                            }
-                            catch (Exception ex)
-                            {
-                                MessageBox.Show("Lỗi khi xuất file: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            }
+                            sb.AppendLine($"\"{r.StartTime:dd/MM/yyyy}\",\"{r.RoomName}\",\"{r.StartTime:HH:mm}\",\"{r.MovieName.Replace("\"", "\"\"")}\"," +
+                                          $"{r.BookedSeats},{r.TotalSeats},{r.OccupancyRate:F1}%,\"{r.PerformanceStatus}\"");
                         }
+                        File.WriteAllText(sfd.FileName, sb.ToString(), new UTF8Encoding(true));
+                        MessageBox.Show("Xuất báo cáo lấp đầy thành công!\nĐường dẫn: " + sfd.FileName, "Xuất File", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        MessageBox.Show("Lỗi khi xuất file: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 };
             }
-        }
-
-        private void LoadRealDataFromDatabase()
-        {
-            PopulateFilterBar();
-            LoadKpiCardsFromDatabase();
-            LoadMatrixFromDatabase();
-            LoadAnalyticsFromDatabase();
         }
 
         private void PopulateFilterBar()
@@ -144,41 +111,31 @@ namespace CinemaManagement.Forms.Staff
             if (pnlFilter == null) return;
             pnlFilter.Controls.Clear();
 
-            AddLabel(pnlFilter, "🏢 PHÒNG CHIẾU MỤC TIÊU", 15, 8, 8F, ColorTextMuted, true);
+            AddLabel(pnlFilter, "🏢 PHÒNG CHIẾU", 15, 8, 8F, ColorTextMuted, true);
             cmbRooms = new ComboBox
             {
                 Location = new Point(15, 26),
                 Size = new Size(220, 25),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = ColorTranslator.FromHtml("#161a1e"),
-                ForeColor = Color.White
+                ForeColor = Color.White,
+                DisplayMember = "Text",
+                ValueMember = "Id"
             };
-            cmbRooms.Items.Add("Tất cả phòng (Toàn cụm DB)");
+            var roomItems = new List<object> { new { Id = 0, Text = "Tất cả phòng" } };
             try
             {
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
-                {
-                    conn.Open();
-                    using (SQLiteCommand cmd = new SQLiteCommand("SELECT RoomName FROM Rooms;", conn))
-                    {
-                        using (SQLiteDataReader reader = cmd.ExecuteReader())
-                        {
-                            while (reader.Read())
-                            {
-                                cmbRooms.Items.Add(reader["RoomName"].ToString());
-                            }
-                        }
-                    }
-                }
+                roomItems.AddRange(_roomService.GetAll().Select(r => (object)new { Id = r.RoomId, Text = r.RoomName }));
             }
-            catch
+            catch (Exception ex)
             {
+                MessageBox.Show("Không tải được danh sách phòng: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            cmbRooms.SelectedIndex = 0;
-            cmbRooms.SelectedIndexChanged += (s, e) => LoadMatrixFromDatabase();
+            cmbRooms.DataSource = roomItems;
+            cmbRooms.SelectedIndexChanged += (s, e) => RenderAll();
             pnlFilter.Controls.Add(cmbRooms);
 
-            AddLabel(pnlFilter, "⏰ KHUNG GIỜ PHÂN TÍCH", 255, 8, 8F, ColorTextMuted, true);
+            AddLabel(pnlFilter, "⏰ KHUNG GIỜ", 255, 8, 8F, ColorTextMuted, true);
             cmbHours = new ComboBox
             {
                 Location = new Point(255, 26),
@@ -187,12 +144,12 @@ namespace CinemaManagement.Forms.Staff
                 BackColor = ColorTranslator.FromHtml("#161a1e"),
                 ForeColor = Color.White
             };
-            cmbHours.Items.AddRange(new object[] { "Tất cả khung giờ (09:00 - 24:00)", "Ca sáng (09:00 - 12:00)", "Ca chiều (12:00 - 18:00)", "Ca tối (18:00 - 24:00)" });
+            cmbHours.Items.AddRange(new object[] { "Tất cả khung giờ", "Ca sáng (trước 12:00)", "Ca chiều (12:00 - 18:00)", "Ca tối (từ 18:00)" });
             cmbHours.SelectedIndex = 0;
-            cmbHours.SelectedIndexChanged += (s, e) => LoadMatrixFromDatabase();
+            cmbHours.SelectedIndexChanged += (s, e) => RenderAll();
             pnlFilter.Controls.Add(cmbHours);
 
-            AddLabel(pnlFilter, "📊 LỌC HIỆU SUẤT TỐI THIỂU", 495, 8, 8F, ColorTextMuted, true);
+            AddLabel(pnlFilter, "📊 LẤP ĐẦY TỐI THIỂU", 495, 8, 8F, ColorTextMuted, true);
             trkMinRate = new TrackBar
             {
                 Location = new Point(490, 24),
@@ -206,254 +163,209 @@ namespace CinemaManagement.Forms.Staff
             {
                 Text = "0%",
                 Location = new Point(655, 28),
-                Size = new Size(40, 20),
+                Size = new Size(45, 20),
                 ForeColor = ColorCyan,
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold)
             };
-            trkMinRate.Scroll += (s, e) => {
+            trkMinRate.Scroll += (s, e) =>
+            {
                 lblRateValue.Text = trkMinRate.Value + "%";
-                LoadMatrixFromDatabase();
+                RenderAll();
             };
             pnlFilter.Controls.Add(trkMinRate);
             pnlFilter.Controls.Add(lblRateValue);
 
-            AddLabel(pnlFilter, "📅 NGÀY BÁO CÁO", 720, 8, 8F, ColorTextMuted, true);
+            AddLabel(pnlFilter, "📅 NGÀY CHIẾU", 720, 8, 8F, ColorTextMuted, true);
             dtpReportDate = new DateTimePicker
             {
                 Location = new Point(720, 26),
                 Size = new Size(230, 25),
                 Format = DateTimePickerFormat.Short,
-                Value = DateTime.Now
+                Value = DateTime.Today
             };
             dtpReportDate.ValueChanged += (s, e) => LoadRealDataFromDatabase();
             pnlFilter.Controls.Add(dtpReportDate);
         }
 
-        private void LoadKpiCardsFromDatabase()
+        private void LoadRealDataFromDatabase()
         {
-            int totalMovies = 0;
-            int totalRooms = 0;
-            int totalShowtimes = 0;
-
+            DateTime day = dtpReportDate?.Value.Date ?? DateTime.Today;
             try
             {
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
-                {
-                    conn.Open();
-                    using (SQLiteCommand cmd = new SQLiteCommand("SELECT COUNT(*) FROM Movies;", conn))
-                    {
-                        totalMovies = Convert.ToInt32(cmd.ExecuteScalar());
-                    }
-                    using (SQLiteCommand cmd = new SQLiteCommand("SELECT COUNT(*) FROM Rooms;", conn))
-                    {
-                        totalRooms = Convert.ToInt32(cmd.ExecuteScalar());
-                    }
-                    using (SQLiteCommand cmd = new SQLiteCommand("SELECT COUNT(*) FROM Showtimes;", conn))
-                    {
-                        totalShowtimes = Convert.ToInt32(cmd.ExecuteScalar());
-                    }
-                }
+                _dayData = _reportService.GetShowtimeOccupancy(day, day.AddDays(1));
             }
-            catch
+            catch (Exception ex)
             {
+                MessageBox.Show("Lỗi truy vấn tỷ lệ lấp đầy: " + ex.Message, "Lỗi CSDL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _dayData = new List<ShowtimeOccupancyReportDto>();
             }
-
-            SetupCard(pnlCard1, "TỔNG SỐ PHIM TRONG CSDL", $"{totalMovies} Phim", "Đồng bộ trực tiếp từ bảng Movies");
-            SetupCard(pnlCard2, "TỔNG SỐ PHÒNG CHIẾU", $"{totalRooms} Phòng", "Đồng bộ trực tiếp từ bảng Rooms");
-            SetupCard(pnlCard3, "TỔNG SUẤT CHÍU HỆ THỐNG", $"{totalShowtimes} Suất", "Đồng bộ trực tiếp từ bảng Showtimes");
-            SetupCard(pnlCard4, "TRẠNG THÁI KẾT NỐI DB", "SQLite LIVE", "Đã kết nối thành công cinema.db", ColorCyan);
+            RenderAll();
         }
 
-        private void LoadMatrixFromDatabase()
+        private List<ShowtimeOccupancyReportDto> GetFilteredRows()
+        {
+            int roomId = cmbRooms?.SelectedValue is int id ? id : 0;
+            int shift = cmbHours?.SelectedIndex ?? 0;
+            int minRate = trkMinRate?.Value ?? 0;
+
+            return _dayData
+                .Where(r => roomId == 0 || r.RoomId == roomId)
+                .Where(r => shift switch
+                {
+                    1 => r.StartTime.Hour < 12,
+                    2 => r.StartTime.Hour >= 12 && r.StartTime.Hour < 18,
+                    3 => r.StartTime.Hour >= 18,
+                    _ => true
+                })
+                .Where(r => r.OccupancyRate >= minRate)
+                .OrderBy(r => r.RoomName).ThenBy(r => r.StartTime)
+                .ToList();
+        }
+
+        private void RenderAll()
+        {
+            var rows = GetFilteredRows();
+            RenderKpiCards(rows);
+            RenderMatrix(rows);
+            RenderAnalytics(rows);
+        }
+
+        private void RenderKpiCards(List<ShowtimeOccupancyReportDto> rows)
+        {
+            int sold = rows.Sum(r => r.BookedSeats);
+            int seats = rows.Sum(r => r.TotalSeats);
+            double avg = seats > 0 ? (double)sold / seats * 100 : 0;
+            int hot = rows.Count(r => r.OccupancyRate >= ReportService.HotThreshold);
+            int cold = rows.Count(r => r.OccupancyRate < ReportService.ColdThreshold);
+
+            SetupCard(pnlCard1, "TỶ LỆ LẤP ĐẦY TRUNG BÌNH", $"{avg:F1}%", $"{rows.Count} suất trong bộ lọc", ColorCyan);
+            SetupCard(pnlCard2, "VÉ ĐÃ BÁN / TỔNG GHẾ", $"{sold:N0} / {seats:N0}", "Theo các suất đang lọc");
+            SetupCard(pnlCard3, "SUẤT CHÁY VÉ (≥ 80%)", $"{hot} suất", "Nên tăng suất chiếu", ColorAmber);
+            SetupCard(pnlCard4, "SUẤT VẮNG (< 30%)", $"{cold} suất", "Cân nhắc giảm suất", ColorRed);
+        }
+
+        private void RenderMatrix(List<ShowtimeOccupancyReportDto> rows)
         {
             if (pnlMatrix == null) return;
             pnlMatrix.Controls.Clear();
+            pnlMatrix.AutoScroll = true;
 
-            AddLabel(pnlMatrix, "Ma trận Nhiệt Lấp Đầy (Auditorium vs Schedule Slot Matrix - Dữ liệu thực từ DB)", 15, 12, 11F, ColorTextWhite, true);
-            AddLabel(pnlMatrix, "Truy vấn thời gian thực từ các bảng Rooms và Showtimes", 15, 34, 8.5F, ColorTextMuted, true);
+            AddLabel(pnlMatrix, $"Ma trận lấp đầy theo phòng và suất chiếu - {dtpReportDate.Value:dd/MM/yyyy}", 15, 12, 11F, ColorTextWhite, true);
+            AddLabel(pnlMatrix, "Mỗi ô: giờ chiếu • tỷ lệ (vé đã bán/tổng ghế). Xanh ≥ 80%, vàng 30-79%, đỏ < 30%.", 15, 34, 8.5F, ColorTextMuted, false);
 
-            List<string> rooms = new List<string>();
-            try
+            if (rows.Count == 0)
             {
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
+                AddLabel(pnlMatrix, "Không có suất chiếu nào phù hợp bộ lọc trong ngày này.", 15, 75, 9.5F, ColorAmber, true);
+                return;
+            }
+
+            int startY = 62;
+            foreach (var room in rows.GroupBy(r => r.RoomName))
+            {
+                AddLabel(pnlMatrix, room.Key, 12, startY + 8, 8.5F, ColorTextWhite, true);
+
+                int cellX = 190;
+                foreach (var r in room)
                 {
-                    conn.Open();
-                    string query = "SELECT RoomName FROM Rooms;";
-                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
+                    var cell = new Button
                     {
-                        using (SQLiteDataReader reader = cmd.ExecuteReader())
-                        {
-                            while (reader.Read())
-                            {
-                                rooms.Add(reader["RoomName"].ToString());
-                            }
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            if (rooms.Count == 0)
-            {
-                rooms.Add("Chưa có phòng trong CSDL");
-            }
-
-            string selectedRoomFilter = cmbRooms != null && cmbRooms.SelectedIndex > 0 ? cmbRooms.SelectedItem.ToString() : "";
-            int minRateFilter = trkMinRate != null ? trkMinRate.Value : 0;
-            string selectedTimeFilter = cmbHours != null ? cmbHours.SelectedItem.ToString() : "Tất cả";
-
-            List<string> allHours = new List<string> { "09:00", "11:30", "14:00", "16:30", "19:00", "21:30", "23:45" };
-            List<string> filteredHours = new List<string>();
-
-            if (selectedTimeFilter.Contains("Ca sáng"))
-            {
-                filteredHours = allHours.FindAll(h => string.Compare(h, "12:00") <= 0);
-            }
-            else if (selectedTimeFilter.Contains("Ca chiều"))
-            {
-                filteredHours = allHours.FindAll(h => string.Compare(h, "12:00") > 0 && string.Compare(h, "18:00") <= 0);
-            }
-            else if (selectedTimeFilter.Contains("Ca tối"))
-            {
-                filteredHours = allHours.FindAll(h => string.Compare(h, "18:00") > 0);
-            }
-            else
-            {
-                filteredHours = allHours;
-            }
-
-            int startX = 210;
-            foreach (var h in filteredHours)
-            {
-                AddLabel(pnlMatrix, h, startX, 58, 9F, ColorTextMuted, true);
-                startX += 105;
-            }
-
-            int startY = 85;
-            for (int i = 0; i < rooms.Count && i < 5; i++)
-            {
-                if (!string.IsNullOrEmpty(selectedRoomFilter) && rooms[i] != selectedRoomFilter)
-                {
-                    continue;
-                }
-
-                AddLabel(pnlMatrix, rooms[i], 12, startY + 5, 8.5F, ColorTextWhite, true);
-
-                int cellX = 210;
-                for (int j = 0; j < allHours.Count; j++)
-                {
-                    string hStr = allHours[j];
-                    if (!filteredHours.Contains(hStr))
-                    {
-                        continue;
-                    }
-
-                    int dynamicRate = (rooms.Count * 17 + i * 23 + j * 11) % 85 + 15;
-                    if (dynamicRate < minRateFilter)
-                    {
-                        cellX += 105;
-                        continue;
-                    }
-
-                    string val = $"{dynamicRate}%\n{dynamicRate * 10}/120";
-
-                    Button btnCell = new Button
-                    {
-                        Text = val,
+                        Text = $"{r.StartTime:HH:mm} • {r.OccupancyRate:F0}%\n{r.BookedSeats}/{r.TotalSeats}",
                         Font = new Font("Segoe UI", 7.5F, FontStyle.Bold),
-                        Location = new Point(cellX, startY - 2),
-                        Size = new Size(95, 30),
+                        Location = new Point(cellX, startY),
+                        Size = new Size(105, 34),
                         FlatStyle = FlatStyle.Flat,
-                        Enabled = false
+                        TabStop = false
                     };
-                    btnCell.FlatAppearance.BorderSize = 1;
+                    cell.FlatAppearance.BorderSize = 1;
 
-                    if (dynamicRate >= 80)
+                    if (r.OccupancyRate >= ReportService.HotThreshold)
                     {
-                        btnCell.BackColor = ColorTranslator.FromHtml("#0284c7");
-                        btnCell.ForeColor = Color.White;
-                        btnCell.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#38bdf8");
+                        cell.BackColor = ColorTranslator.FromHtml("#0284c7");
+                        cell.ForeColor = Color.White;
+                        cell.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#38bdf8");
                     }
-                    else if (dynamicRate >= 50)
+                    else if (r.OccupancyRate >= ReportService.ColdThreshold)
                     {
-                        btnCell.BackColor = ColorTranslator.FromHtml("#854d0e");
-                        btnCell.ForeColor = ColorTranslator.FromHtml("#fef08a");
-                        btnCell.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#eab308");
+                        cell.BackColor = ColorTranslator.FromHtml("#854d0e");
+                        cell.ForeColor = ColorTranslator.FromHtml("#fef08a");
+                        cell.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#eab308");
                     }
                     else
                     {
-                        btnCell.BackColor = ColorTranslator.FromHtml("#7f1d1d");
-                        btnCell.ForeColor = ColorTranslator.FromHtml("#fca5a5");
-                        btnCell.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#b91c1c");
+                        cell.BackColor = ColorTranslator.FromHtml("#7f1d1d");
+                        cell.ForeColor = ColorTranslator.FromHtml("#fca5a5");
+                        cell.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#b91c1c");
                     }
 
-                    pnlMatrix.Controls.Add(btnCell);
-                    cellX += 105;
+                    _cellToolTip.SetToolTip(cell, $"{r.MovieName}\n{r.StartTime:HH:mm} - {r.RoomName}\n{r.PerformanceStatus}");
+                    pnlMatrix.Controls.Add(cell);
+                    cellX += 112;
                 }
 
-                startY += 32;
+                startY += 40;
             }
         }
 
-        private void LoadAnalyticsFromDatabase()
+        private void RenderAnalytics(List<ShowtimeOccupancyReportDto> rows)
         {
-            List<string> dbMoviesList = new List<string>();
-            try
-            {
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
-                {
-                    conn.Open();
-                    string query = "SELECT Title FROM Movies LIMIT 5;";
-                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
-                    {
-                        using (SQLiteDataReader reader = cmd.ExecuteReader())
-                        {
-                            while (reader.Read())
-                            {
-                                dbMoviesList.Add(reader["Title"].ToString());
-                            }
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-
             if (pnlLeftAnalytics != null)
             {
                 pnlLeftAnalytics.Controls.Clear();
-                AddLabel(pnlLeftAnalytics, "Chi Tiết Suất Chiếu Thực Tế (Bảng Movies)", 15, 12, 11F, ColorTextWhite, true);
-                AddLabel(pnlLeftAnalytics, "Danh sách phim được truy vấn trực tiếp từ cơ sở dữ liệu", 15, 32, 8.5F, ColorTextMuted, true);
+                pnlLeftAnalytics.AutoScroll = true;
+                AddLabel(pnlLeftAnalytics, "Xếp hạng phim theo tỷ lệ lấp đầy", 15, 12, 11F, ColorTextWhite, true);
+                AddLabel(pnlLeftAnalytics, "Tổng vé đã bán ÷ tổng ghế của các suất trong bộ lọc", 15, 32, 8.5F, ColorTextMuted, false);
 
-                int yPos = 75;
-                if (dbMoviesList.Count > 0)
-                {
-                    int rank = 1;
-                    foreach (var movieTitle in dbMoviesList)
+                var ranking = rows.GroupBy(r => r.MovieName)
+                    .Select(g => new
                     {
-                        int rate = 95 - (rank * 12);
-                        AddLabel(pnlLeftAnalytics, $"{rank}. {movieTitle} 👉 {rate}% [ĐỒNG BỘ DB]", 15, yPos, 9F, rank <= 2 ? ColorCyan : ColorTextWhite, true);
-                        yPos += 38;
-                        rank++;
-                    }
-                }
-                else
+                        Movie = g.Key,
+                        Shows = g.Count(),
+                        Sold = g.Sum(x => x.BookedSeats),
+                        Seats = g.Sum(x => x.TotalSeats)
+                    })
+                    .Select(x => new { x.Movie, x.Shows, x.Sold, x.Seats, Rate = x.Seats > 0 ? (double)x.Sold / x.Seats * 100 : 0 })
+                    .OrderByDescending(x => x.Rate)
+                    .ToList();
+
+                if (ranking.Count == 0)
                 {
-                    AddLabel(pnlLeftAnalytics, "Không tìm thấy dữ liệu phim trong bảng Movies.", 15, 75, 9F, ColorAmber, true);
+                    AddLabel(pnlLeftAnalytics, "Chưa có dữ liệu.", 15, 75, 9F, ColorAmber, true);
+                }
+
+                int y = 65;
+                int rank = 1;
+                foreach (var m in ranking)
+                {
+                    Color c = m.Rate >= ReportService.HotThreshold ? ColorCyan
+                        : m.Rate < ReportService.ColdThreshold ? ColorRed : ColorTextWhite;
+                    AddLabel(pnlLeftAnalytics,
+                        $"{rank}. {m.Movie}  👉 {m.Rate:F1}%  ({m.Sold}/{m.Seats} ghế, {m.Shows} suất)  {ReportService.ClassifyOccupancy(m.Rate)}",
+                        15, y, 9F, c, true);
+                    y += 30;
+                    rank++;
                 }
             }
 
             if (pnlRightAnalytics != null)
             {
                 pnlRightAnalytics.Controls.Clear();
-                AddLabel(pnlRightAnalytics, "Cảnh Báo & Thống Kê DB", 15, 12, 11F, ColorRed, true);
-                AddLabel(pnlRightAnalytics, "Hệ thống giám sát trạng thái cơ sở dữ liệu SQLite", 15, 35, 8.5F, ColorTextMuted, true);
-                AddLabel(pnlRightAnalytics, "⚠️ Trạng thái: Kết nối an toàn (cinema.db)", 15, 75, 9F, ColorAmber, true);
-                AddLabel(pnlRightAnalytics, "💡 Gợi ý: Dùng Navicat để thêm/sửa dữ liệu bảng\nMovies, Rooms hoặc Showtimes để cập nhật UI.", 15, 115, 8.5F, ColorTextWhite, true);
-                AddLabel(pnlRightAnalytics, "🔄 Tự động đồng bộ Real-time Query Cache", 15, 195, 9.5F, ColorCyan, true);
+                pnlRightAnalytics.AutoScroll = true;
+                AddLabel(pnlRightAnalytics, "Cảnh báo suất vắng (< 30%)", 15, 12, 11F, ColorRed, true);
+
+                var cold = rows.Where(r => r.OccupancyRate < ReportService.ColdThreshold && r.StartTime > DateTime.Now)
+                    .OrderBy(r => r.StartTime)
+                    .ToList();
+
+                int y = 45;
+                if (cold.Count == 0)
+                {
+                    AddLabel(pnlRightAnalytics, "Không có suất sắp chiếu nào bị vắng.", 15, y, 9F, ColorCyan, true);
+                }
+                foreach (var r in cold.Take(10))
+                {
+                    AddLabel(pnlRightAnalytics, $"⚠️ {r.StartTime:HH:mm} {r.RoomName}\n    {r.MovieName} - {r.OccupancyRate:F0}%", 15, y, 8.5F, ColorAmber, false);
+                    y += 40;
+                }
             }
         }
 

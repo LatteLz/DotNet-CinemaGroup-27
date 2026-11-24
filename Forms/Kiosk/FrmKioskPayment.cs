@@ -1,359 +1,240 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
-using Microsoft.EntityFrameworkCore;
-using CinemaManagement.Data;
+using CinemaManagement.Helpers;
 using CinemaManagement.Models;
+using CinemaManagement.Services;
 
 namespace CinemaManagement.Forms.Kiosk;
 
 public partial class FrmKioskPayment : Form
-    {
-        private readonly int _showtimeId;
-        private readonly List<string> _selectedSeats;
-        private readonly decimal _ticketTotal;
-        private readonly List<KioskComboSelection> _selectedCombos;
-        private readonly string _sessionId;
-        private string _paymentMethod = "QR_MOMO";
-        private System.Windows.Forms.Timer _timer;
-
-        private decimal ComboTotal => _selectedCombos.Sum(c => c.UnitPrice * c.Quantity);
-        private decimal GrandTotal => _ticketTotal + ComboTotal;
-
-        public FrmKioskPayment(
-            int showtimeId,
-            List<string> selectedSeats,
-            decimal ticketTotal,
-            List<KioskComboSelection>? selectedCombos = null,
-            string sessionId = "")
-        {
-            _showtimeId = showtimeId;
-            _selectedSeats = selectedSeats ?? new List<string>();
-            _ticketTotal = ticketTotal;
-            _selectedCombos = selectedCombos ?? new List<KioskComboSelection>();
-            _sessionId = sessionId;
-
-            InitializeComponent();
-            UpdateDynamicTexts();
-            RegisterEvents();
-            LoadOrderSummary();
-        }
-
-        private void UpdateDynamicTexts()
-        {
-            btnConfirmPay.Text = $"XÁC NHẬN ĐÃ THANH TOÁN ({GrandTotal:N0} VNĐ)";
-
-            qrPlaceholder.Controls.Clear();
-            qrPlaceholder.Padding = new Padding(8);
-
-            PictureBox picQrPayment = new PictureBox
-            {
-                Dock = DockStyle.Fill,
-                SizeMode = PictureBoxSizeMode.Zoom,
-                BackColor = Color.White
-            };
-            
-            string[] possibleFiles = { "My qr.jpg", "my_qr.png", "my_qr.jpg", "my_qr.jpeg" };
-            string finalPath = "";
-
-            foreach (var fileName in possibleFiles)
-            {
-                string path1 = System.IO.Path.Combine(Application.StartupPath, "Image", fileName);
-                string path2 = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Image", fileName);
-
-                if (System.IO.File.Exists(path1)) { finalPath = path1; break; }
-                if (System.IO.File.Exists(path2)) { finalPath = path2; break; }
-            }
-
-            if (!string.IsNullOrEmpty(finalPath))
-            {
-                using var stream = new System.IO.FileStream(finalPath, System.IO.FileMode.Open, System.IO.FileAccess.Read);
-                picQrPayment.Image = Image.FromStream(stream);
-            }
-
-            qrPlaceholder.Controls.Add(picQrPayment);
-        }
-
-        private void RegisterEvents()
-        {
-            btnBack.Click += (s, e) =>
-            {
-                _timer?.Stop();
-                var comboForm = Application.OpenForms.OfType<FrmKioskCombo>().FirstOrDefault();
-                if (comboForm != null)
-                {
-                    comboForm.TopMost = true;
-                    comboForm.Show();
-                    comboForm.Activate();
-                }
-                else
-                {
-                    var newComboForm = new FrmKioskCombo(_showtimeId, _selectedSeats, _ticketTotal);
-                    newComboForm.TopMost = true;
-                    newComboForm.Show();
-                }
-                this.Close();
-            };
-
-            btnCancel.Click += (s, e) =>
-            {
-                if (MessageBox.Show("Bạn có chắc muốn hủy đơn hàng và quay về trang chủ?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                {
-                    _timer?.Stop();
-                    ReleaseSeatHolds();
-                    new FrmKioskHome().Show();
-                    this.Close();
-                }
-            };
-
-            btnQr.Click += (s, e) => SelectPaymentMethod("QR_MOMO", "Quét mã QR Ngân hàng / Ví điện tử", btnQr, new[] { btnCard, btnCash });
-            btnCard.Click += (s, e) => SelectPaymentMethod("CARD_POS", "Chạm hoặc quẹt thẻ vào đầu đọc bên dưới", btnCard, new[] { btnQr, btnCash });
-            btnCash.Click += (s, e) => SelectPaymentMethod("COUNTER_CASH", "Nhận mã đặt chỗ và thanh toán tiền mặt tại quầy", btnCash, new[] { btnQr, btnCard });
-
-            btnConfirmPay.Click += BtnConfirmPay_Click;
-
-            _timer = new System.Windows.Forms.Timer { Interval = 1000 };
-            _timer.Tick += (s, e) =>
-            {
-                if (lblClock != null && !lblClock.IsDisposed)
-                    lblClock.Text = DateTime.Now.ToString("HH:mm:ss");
-            };
-            _timer.Start();
-
-            this.FormClosed += (_, _) => _timer?.Dispose();
-        }
-
-        private void SelectPaymentMethod(string code, string desc, Button activeBtn, Button[] otherBtns)
-        {
-            _paymentMethod = code;
-            lblSelectedMethod.Text = $"Phương thức đang chọn: {desc}";
-            activeBtn.BackColor = ColorTranslator.FromHtml("#1a5276");
-            activeBtn.ForeColor = Color.White;
-
-            foreach (var b in otherBtns)
-            {
-                b.BackColor = ColorTranslator.FromHtml("#262a2f");
-                b.ForeColor = ColorTranslator.FromHtml("#c1c7cf");
-            }
-
-            if (code == "QR_MOMO")
-                lblQrInstruction.Text = "Mở ứng dụng Ngân hàng hoặc Ví điện tử để quét mã QR.\nHệ thống sẽ tự động xuất vé ngay sau khi giao dịch thành công.";
-            else if (code == "CARD_POS")
-                lblQrInstruction.Text = "Vui lòng chạm thẻ (Contactless) hoặc cắm thẻ chip vào thiết bị POS bên dưới màn hình.";
-            else
-                lblQrInstruction.Text = "Bấm xác nhận bên dưới để in phiếu tạm, sau đó mang phiếu đến quầy thu ngân thanh toán trong 15 phút.";
-        }
-
-        private void LoadOrderSummary()
-        {
-            pnlOrderDetails.Controls.Clear();
-            using var db = new CinemaDbContext();
-
-            var showtime = db.Showtimes
-                .Include(st => st.Movie)
-                .Include(st => st.Room)
-                .FirstOrDefault(st => st.ShowtimeId == _showtimeId);
-
-            int yPos = 10;
-
-            void AddLine(string label, string value, bool isBold = false, Color? valueColor = null, int fontSize = 11)
-            {
-                Label lblLeft = new Label
-                {
-                    Text = label,
-                    Font = new Font("Segoe UI", fontSize, isBold ? FontStyle.Bold : FontStyle.Regular),
-                    ForeColor = ColorTranslator.FromHtml("#8b9198"),
-                    Location = new Point(0, yPos),
-                    AutoSize = true
-                };
-
-                int rightX = fontSize >= 15 ? 310 : 240;
-
-                Label lblRight = new Label
-                {
-                    Text = value,
-                    Font = new Font("Segoe UI", fontSize, isBold ? FontStyle.Bold : FontStyle.Regular),
-                    ForeColor = valueColor ?? ColorTranslator.FromHtml("#e0e3e8"),
-                    Location = new Point(rightX, yPos),
-                    MaximumSize = new Size(680 - rightX, 0),
-                    AutoSize = true
-                };
-
-                pnlOrderDetails.Controls.Add(lblLeft);
-                pnlOrderDetails.Controls.Add(lblRight);
-                yPos += Math.Max(lblLeft.Height, lblRight.Height) + 16;
-            }
-
-            if (showtime != null)
-            {
-                AddLine("Phim:", showtime.Movie?.Title.ToUpper() ?? "N/A", true, Color.White, 13);
-                AddLine("Phòng chiếu:", showtime.Room?.RoomName ?? "N/A");
-                AddLine("Suất chiếu:", showtime.StartTime.ToString("HH:mm - dd/MM/yyyy"));
-            }
-
-            AddLine("Ghế đã chọn:", string.Join(", ", _selectedSeats), true, ColorTranslator.FromHtml("#38bdf8"));
-            AddLine($"Tiền vé ({_selectedSeats.Count} ghế):", $"{_ticketTotal:N0} VNĐ", true);
-
-            if (_selectedCombos.Any())
-            {
-                yPos += 10;
-                AddLine("Bắp & Nước:", "", true, ColorTranslator.FromHtml("#ffb961"));
-                foreach (var combo in _selectedCombos)
-                {
-                    AddLine($"  • {combo.ComboName} (x{combo.Quantity})", $"{(combo.UnitPrice * combo.Quantity):N0} VNĐ");
-                }
-            }
-
-            Panel divider = new Panel
-            {
-                Size = new Size(680, 2),
-                Location = new Point(0, yPos + 10),
-                BackColor = ColorTranslator.FromHtml("#262a2f")
-            };
-            pnlOrderDetails.Controls.Add(divider);
-            yPos += 30;
-
-            AddLine("TỔNG THANH TOÁN:", $"{GrandTotal:N0} VNĐ", true, ColorTranslator.FromHtml("#ffb961"), 16);
-        }
-
-       private void BtnConfirmPay_Click(object? sender, EventArgs e)
 {
-    btnConfirmPay.Enabled = false;
-    btnConfirmPay.Text = "ĐANG XỬ LÝ GIAO DỊCH...";
+    private readonly KioskOrder _order;
+    private readonly BookingService _bookingService = new();
+    private readonly ShowtimeService _showtimeService = new();
+    private string _paymentMethod = PaymentMethods.QrTransfer;
+    private System.Windows.Forms.Timer _timer = null!;
+    private PictureBox? _picQrPayment;
 
-    try
+    public FrmKioskPayment(KioskOrder order)
     {
-        using var db = new CinemaDbContext();
-        using var transaction = db.Database.BeginTransaction();
+        _order = order;
 
-        var showtime = db.Showtimes
-            .Include(s => s.Movie)
-            .Include(s => s.Room)
-            .FirstOrDefault(s => s.ShowtimeId == _showtimeId);
+        InitializeComponent();
 
-        if (showtime == null)
-            throw new Exception("Suất chiếu không tồn tại!");
-        
-        var roomSeats = db.Seats.Where(s => s.RoomId == showtime.RoomId).ToList();
-        var soldSeatIds = db.Tickets
-            .Where(t => t.ShowtimeId == _showtimeId)
-            .Select(t => t.SeatId)
-            .ToHashSet();
-        
-        var selectedSeatEntities = new List<Seat>();
-        foreach (var seatCode in _selectedSeats)
+        UpdateDynamicTexts();
+        RegisterEvents();
+        LoadOrderSummary();
+        WindowLayout.ScaleToScreen(this);
+    }
+
+    private void UpdateDynamicTexts()
+    {
+        btnConfirmPay.Text = $"XÁC NHẬN ĐÃ THANH TOÁN ({_order.GrandTotal:N0} VNĐ)";
+
+        qrPlaceholder.Controls.Clear();
+        qrPlaceholder.Padding = new Padding(8);
+        _picQrPayment = new PictureBox
         {
-            var seatEntity = roomSeats.FirstOrDefault(s =>
-                s.SeatNumber != null && s.SeatNumber.ToString().Equals(seatCode, StringComparison.OrdinalIgnoreCase));
+            Dock = DockStyle.Fill,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = Color.White
+        };
+        qrPlaceholder.Controls.Add(_picQrPayment);
+        RenderPaymentQr();
+    }
 
-            if (seatEntity != null)
+    private void RenderPaymentQr()
+    {
+        if (_picQrPayment == null) return;
+        try
+        {
+            var old = _picQrPayment.Image;
+            _picQrPayment.Image = QrHelper.Generate(
+                QrHelper.BuildMockPaymentPayload(_order.SessionId[..8].ToUpper(), _order.GrandTotal), 8);
+            old?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            lblQrInstruction.Text = "Không tạo được mã QR: " + ex.Message;
+        }
+    }
+
+    private void RegisterEvents()
+    {
+        btnBack.Click += (_, _) =>
+        {
+            _timer.Stop();
+            var comboForm = Application.OpenForms.OfType<FrmKioskCombo>().FirstOrDefault();
+            if (comboForm != null)
             {
-                if (soldSeatIds.Contains(seatEntity.SeatId))
-                {
-                    throw new Exception($"Ghế {seatCode} vừa được khách hàng khác thanh toán! Giao dịch đã được hủy.");
-                }
-                selectedSeatEntities.Add(seatEntity);
+                comboForm.Show();
+                comboForm.Activate();
+            }
+            Close();
+        };
+
+        btnCancel.Click += (_, _) =>
+        {
+            if (MessageBox.Show("Bạn có chắc muốn hủy đơn hàng và quay về trang chủ?", "Xác nhận",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
+
+            _timer.Stop();
+            try { new SeatHoldService().ReleaseSession(_order.SessionId); } catch { }
+            KioskFlow.ReturnHome(this);
+        };
+
+        btnQr.Click += (_, _) => SelectPaymentMethod(PaymentMethods.QrTransfer, "Quét mã QR Ngân hàng / Ví điện tử (mô phỏng)", btnQr, new[] { btnCard });
+        btnCard.Click += (_, _) => SelectPaymentMethod(PaymentMethods.Card, "Chạm hoặc quẹt thẻ (mô phỏng)", btnCard, new[] { btnQr });
+
+        btnConfirmPay.Click += BtnConfirmPay_Click;
+
+        _timer = new System.Windows.Forms.Timer { Interval = 1000 };
+        _timer.Tick += (_, _) =>
+        {
+            if (lblClock != null && !lblClock.IsDisposed)
+                lblClock.Text = DateTime.Now.ToString("HH:mm:ss");
+        };
+        _timer.Start();
+
+        FormClosed += (_, _) => _timer.Dispose();
+    }
+
+    private void SelectPaymentMethod(string code, string desc, Button activeBtn, Button[] otherBtns)
+    {
+        _paymentMethod = code;
+        lblSelectedMethod.Text = $"Phương thức đang chọn: {desc}";
+        activeBtn.BackColor = ColorTranslator.FromHtml("#1a5276");
+        activeBtn.ForeColor = Color.White;
+
+        foreach (var b in otherBtns)
+        {
+            b.BackColor = ColorTranslator.FromHtml("#262a2f");
+            b.ForeColor = ColorTranslator.FromHtml("#c1c7cf");
+        }
+
+        qrPlaceholder.Visible = code == PaymentMethods.QrTransfer;
+        lblQrInstruction.Text = code == PaymentMethods.QrTransfer
+            ? "Đây là mã QR mô phỏng (chế độ offline).\nBấm xác nhận bên dưới, hệ thống mặc định giao dịch thành công và xuất vé."
+            : "Thanh toán thẻ được mô phỏng (chế độ offline).\nBấm xác nhận bên dưới, hệ thống mặc định giao dịch thành công và xuất vé.";
+    }
+
+    private void LoadOrderSummary()
+    {
+        pnlOrderDetails.Controls.Clear();
+
+        ShowtimeListItemDto? showtime = null;
+        try { showtime = _showtimeService.GetById(_order.ShowtimeId); }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Không tải được thông tin suất chiếu: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        int yPos = 10;
+
+        void AddLine(string label, string value, bool isBold = false, Color? valueColor = null, int fontSize = 11)
+        {
+            var lblLeft = new Label
+            {
+                Text = label,
+                Font = new Font("Segoe UI", fontSize, isBold ? FontStyle.Bold : FontStyle.Regular),
+                ForeColor = ColorTranslator.FromHtml("#8b9198"),
+                Location = new Point(0, yPos),
+                AutoSize = true
+            };
+
+            int rightX = fontSize >= 15 ? 310 : 240;
+            var lblRight = new Label
+            {
+                Text = value,
+                Font = new Font("Segoe UI", fontSize, isBold ? FontStyle.Bold : FontStyle.Regular),
+                ForeColor = valueColor ?? ColorTranslator.FromHtml("#e0e3e8"),
+                Location = new Point(rightX, yPos),
+                MaximumSize = new Size(680 - rightX, 0),
+                AutoSize = true
+            };
+
+            pnlOrderDetails.Controls.Add(lblLeft);
+            pnlOrderDetails.Controls.Add(lblRight);
+            yPos += Math.Max(lblLeft.Height, lblRight.Height) + 16;
+        }
+
+        if (showtime != null)
+        {
+            AddLine("Phim:", showtime.MovieTitle.ToUpper(), true, Color.White, 13);
+            AddLine("Phòng chiếu:", showtime.RoomName);
+            AddLine("Suất chiếu:", showtime.StartTime.ToString("HH:mm - dd/MM/yyyy"));
+        }
+
+        AddLine("Ghế đã chọn:", string.Join(", ", _order.SeatNumbers), true, ColorTranslator.FromHtml("#38bdf8"));
+        AddLine($"Tiền vé ({_order.SeatNumbers.Count} ghế):", $"{_order.TicketTotal:N0} VNĐ", true);
+
+        if (_order.Combos.Any())
+        {
+            yPos += 10;
+            AddLine("Bắp & Nước:", "", true, ColorTranslator.FromHtml("#ffb961"));
+            foreach (var combo in _order.Combos)
+            {
+                AddLine($"  • {combo.ComboName} (x{combo.Quantity})", $"{combo.UnitPrice * combo.Quantity:N0} VNĐ");
             }
         }
-        
-        string movieTitle = showtime.Movie?.Title ?? "N/A";
-        string showtimeInfo = $"{showtime.Room?.RoomName} | {showtime.StartTime:HH:mm dd/MM/yyyy}";
 
-        var booking = new Booking
+        pnlOrderDetails.Controls.Add(new Panel
         {
-            MovieTitle = movieTitle,
-            ShowtimeInfo = showtimeInfo,
-            TotalAmount = GrandTotal,
-            CreatedAt = DateTime.Now
-        };
-        db.Bookings.Add(booking);
-        db.SaveChanges();
-        
-        decimal pricePerTicket = _selectedSeats.Count > 0 ? _ticketTotal / _selectedSeats.Count : 0;
-        foreach (var seatEntity in selectedSeatEntities)
-        {
-            db.Tickets.Add(new Ticket
-            {
-                BookingId = booking.Id,
-                ShowtimeId = _showtimeId,
-                SeatId = seatEntity.SeatId,
-                Price = pricePerTicket
-            });
-        }
-        
-        foreach (var combo in _selectedCombos)
-        {
-            db.BookingCombos.Add(new BookingCombo
-            {
-                BookingId = booking.Id,
-                ComboId = combo.ComboId,
-                Quantity = combo.Quantity,
-                UnitPrice = combo.UnitPrice
-            });
-        }
-        
-        db.Payments.Add(new Payment
-        {
-            BookingId = booking.Id,
-            Amount = GrandTotal,
-            PaymentMethod = _paymentMethod,
-            PaymentDate = DateTime.Now,
-            Status = _paymentMethod == "COUNTER_CASH" ? "Pending" : "Completed"
+            Size = new Size(680, 2),
+            Location = new Point(0, yPos + 10),
+            BackColor = ColorTranslator.FromHtml("#262a2f")
         });
-        
-        var holds = string.IsNullOrEmpty(_sessionId)
-            ? db.SeatHolds.Where(h => h.ShowtimeId == _showtimeId).ToList()
-            : db.SeatHolds.Where(h => h.ShowtimeId == _showtimeId && h.SessionId == _sessionId).ToList();
+        yPos += 30;
 
-        if (holds.Any())
-        {
-            db.SeatHolds.RemoveRange(holds);
-        }
-
-        db.SaveChanges();
-        transaction.Commit();
-        
-        _timer?.Stop();
-        var frmSuccess = new FrmKioskSuccess(
-            booking.Id,
-            movieTitle,
-            showtimeInfo,
-            _selectedSeats,
-            GrandTotal,
-            _paymentMethod
-        );
-        frmSuccess.TopMost = true;
-        frmSuccess.Show();
-        this.Close();
+        AddLine("TỔNG THANH TOÁN:", $"{_order.GrandTotal:N0} VNĐ", true, ColorTranslator.FromHtml("#ffb961"), 16);
     }
-    catch (Exception ex)
+
+    private async void BtnConfirmPay_Click(object? sender, EventArgs e)
+    {
+        btnConfirmPay.Enabled = false;
+        btnConfirmPay.Text = "ĐANG XỬ LÝ GIAO DỊCH...";
+
+        try
+        {
+            BookingReceipt receipt = await _bookingService.CreateBookingAsync(new BookingRequest
+            {
+                ShowtimeId = _order.ShowtimeId,
+                SeatIds = _order.SeatIds,
+                SessionId = _order.SessionId,
+                Combos = _order.Combos.Select(c => new ComboOrderLine { ComboId = c.ComboId, Quantity = c.Quantity }).ToList(),
+                Channel = SalesChannels.Kiosk,
+                PaymentMethod = _paymentMethod,
+                ExpectedTotal = _order.GrandTotal
+            });
+
+            _timer.Stop();
+            var frmSuccess = new FrmKioskSuccess(receipt) { TopMost = true };
+            frmSuccess.Show();
+            KioskFlow.CompleteOrder(frmSuccess);
+        }
+        catch (BusinessException ex)
+        {
+            ResetConfirmButton();
+            MessageBox.Show($"Không thể hoàn tất giao dịch: {ex.Message}", "Cảnh báo đặt vé", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+            var seatForm = Application.OpenForms.OfType<FrmKioskSeat>().FirstOrDefault();
+            if (seatForm != null)
+            {
+                Application.OpenForms.OfType<FrmKioskCombo>().ToList().ForEach(f => f.Close());
+                seatForm.Show();
+                seatForm.Activate();
+                Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            ResetConfirmButton();
+            MessageBox.Show($"Lỗi hệ thống khi thanh toán: {ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void ResetConfirmButton()
     {
         btnConfirmPay.Enabled = true;
-        btnConfirmPay.Text = $"XÁC NHẬN ĐÃ THANH TOÁN ({GrandTotal:N0} VNĐ)";
-        MessageBox.Show($"Không thể hoàn tất giao dịch: {ex.Message}", "Cảnh báo đặt vé", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        btnConfirmPay.Text = $"XÁC NHẬN ĐÃ THANH TOÁN ({_order.GrandTotal:N0} VNĐ)";
     }
 }
-
-        private void ReleaseSeatHolds()
-        {
-            if (string.IsNullOrEmpty(_sessionId)) return;
-            try
-            {
-                using var db = new CinemaDbContext();
-                var holds = db.SeatHolds.Where(h => h.ShowtimeId == _showtimeId && h.SessionId == _sessionId).ToList();
-                db.SeatHolds.RemoveRange(holds);
-                db.SaveChanges();
-            }
-            catch { }
-        }
-    }
-
-    public class KioskComboSelection
-    {
-        public int ComboId { get; set; }
-        public string ComboName { get; set; } = string.Empty;
-        public int Quantity { get; set; }
-        public decimal UnitPrice { get; set; }
-    }

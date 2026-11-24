@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CinemaManagement.Models
@@ -9,13 +9,13 @@ namespace CinemaManagement.Models
         public int BookingComboId { get; set; }
 
         public int BookingId { get; set; }
-        
-        [ForeignKey("BookingId")]
+
+        [ForeignKey(nameof(BookingId))]
         public virtual Booking Booking { get; set; } = null!;
 
-        public int ComboId { get; set; } 
-        
-        [ForeignKey("ComboId")]
+        public int ComboId { get; set; }
+
+        [ForeignKey(nameof(ComboId))]
         public virtual ComboItem ComboItem { get; set; } = null!;
 
         public int Quantity { get; set; }

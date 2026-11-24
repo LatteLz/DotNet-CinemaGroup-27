@@ -1,140 +1,265 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
-using CinemaManagement.Data;
+using CinemaManagement.Models;
 using CinemaManagement.Services;
 
 namespace CinemaManagement.Controls;
+
 public class SeatMapControl : UserControl
 {
+    public static readonly Color ColorAvailable = ColorTranslator.FromHtml("#e2e8f0");
+    public static readonly Color ColorVip = ColorTranslator.FromHtml("#c4b5fd");
+    public static readonly Color ColorCouple = ColorTranslator.FromHtml("#f9a8d4");
+    public static readonly Color ColorSelected = ColorTranslator.FromHtml("#facc15");
+    public static readonly Color ColorSold = ColorTranslator.FromHtml("#475569");
+    public static readonly Color ColorHeldByOther = ColorTranslator.FromHtml("#7f1d1d");
+
     private readonly SeatHoldService _seatHoldService = new();
-    private int _showtimeId;
-    private readonly List<string> _selectedSeats = new();
-    private readonly List<string> _bookedSeats = new();
-    private readonly List<string> _heldSeats = new();
+    private readonly Dictionary<int, Button> _buttons = new();
+    private readonly System.Windows.Forms.Timer _refreshTimer;
+    private readonly ToolTip _toolTip = new();
+    private SeatMapDto? _map;
+
+    public int ShowtimeId { get; private set; }
+
+    public string SessionId { get; private set; } = string.Empty;
 
     public event Action<List<string>>? OnSeatSelectionChanged;
 
-    public List<string> SelectedSeats => _selectedSeats;
+    public IReadOnlyList<SeatStatusDto> SelectedSeats =>
+        _map?.Seats.Where(s => s.State == SeatState.HeldByMe).ToList() ?? new List<SeatStatusDto>();
+
+    public List<string> SelectedSeatNumbers => SelectedSeats.Select(s => s.SeatNumber).ToList();
+    public List<int> SelectedSeatIds => SelectedSeats.Select(s => s.SeatId).ToList();
+    public decimal SelectedTotal => SelectedSeats.Sum(s => s.Price);
 
     public SeatMapControl()
     {
-        this.DoubleBuffered = true;
-        this.BackColor = ColorTranslator.FromHtml("#101418");
-        this.Size = new Size(900, 550);
-    }
-    public void LoadSeatMap(int showtimeId)
-    {
-        _showtimeId = showtimeId;
-        _selectedSeats.Clear();
-        _seatHoldService.ReleaseExpiredHolds();
+        DoubleBuffered = true;
+        BackColor = ColorTranslator.FromHtml("#101418");
+        Size = new Size(900, 550);
 
-        FetchBookedAndHeldSeats();
-        RenderSeatGrid();
+        _refreshTimer = new System.Windows.Forms.Timer { Interval = 4000 };
+        _refreshTimer.Tick += (_, _) => RefreshStates();
     }
-    private void FetchBookedAndHeldSeats()
+
+    public void LoadSeatMap(int showtimeId, string sessionId)
     {
-        _bookedSeats.Clear();
-        _heldSeats.Clear();
+        ShowtimeId = showtimeId;
+        SessionId = string.IsNullOrWhiteSpace(sessionId) ? SeatHoldService.NewSessionId() : sessionId;
+
         try
         {
-            using var db = new CinemaDbContext();
-            var tickets = db.Tickets.Where(t => t.ShowtimeId == _showtimeId).ToList();
-            foreach (var t in tickets)
-            {
-                var seat = db.Seats.FirstOrDefault(s => s.SeatId == t.SeatId);
-                if (seat != null && !string.IsNullOrEmpty(seat.SeatNumber))
-                    _bookedSeats.Add(seat.SeatNumber);
-            }
-            var holds = db.SeatHolds.Where(h => h.ShowtimeId == _showtimeId && h.ExpiresAt > DateTime.Now).ToList();
-            foreach (var h in holds)
-            {
-                var seat = db.Seats.FirstOrDefault(s => s.SeatId == h.SeatId);
-                if (seat != null && !string.IsNullOrEmpty(seat.SeatNumber))
-                    _heldSeats.Add(seat.SeatNumber);
-            }
+            _seatHoldService.ReleaseExpiredHolds();
+            _map = _seatHoldService.GetSeatMap(showtimeId, SessionId);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _map = null;
+            Controls.Clear();
+            Controls.Add(new Label
+            {
+                Text = "Không tải được sơ đồ ghế: " + ex.Message,
+                ForeColor = Color.Salmon,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter
+            });
+            return;
+        }
+
+        RenderSeatGrid();
+        _refreshTimer.Start();
+        OnSeatSelectionChanged?.Invoke(SelectedSeatNumbers);
     }
+
+    public void RefreshStates()
+    {
+        if (ShowtimeId <= 0 || IsDisposed) return;
+        try
+        {
+            var latest = _seatHoldService.GetSeatMap(ShowtimeId, SessionId);
+            bool layoutChanged = _map == null || latest.Seats.Count != _map.Seats.Count;
+            var before = SelectedSeatNumbers;
+            _map = latest;
+
+            if (layoutChanged) RenderSeatGrid();
+            else foreach (var seat in _map.Seats) ApplyStyle(seat);
+
+            if (!before.SequenceEqual(SelectedSeatNumbers))
+                OnSeatSelectionChanged?.Invoke(SelectedSeatNumbers);
+        }
+        catch
+        {
+        }
+    }
+
+    public void ReleaseAll()
+    {
+        try { _seatHoldService.ReleaseSession(SessionId); } catch { }
+        if (ShowtimeId > 0) LoadSeatMap(ShowtimeId, SessionId);
+    }
+
+    public void StartNewSession()
+    {
+        if (ShowtimeId > 0) LoadSeatMap(ShowtimeId, SeatHoldService.NewSessionId());
+    }
+
     private void RenderSeatGrid()
     {
-        this.Controls.Clear();
-        TableLayoutPanel grid = new TableLayoutPanel
+        SuspendLayout();
+        Controls.Clear();
+        _buttons.Clear();
+
+        if (_map == null || _map.Seats.Count == 0)
         {
-            RowCount = 8,
-            ColumnCount = 10,
+            Controls.Add(new Label
+            {
+                Text = "Phòng chiếu chưa có sơ đồ ghế.",
+                ForeColor = Color.Silver,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter
+            });
+            ResumeLayout();
+            return;
+        }
+
+        int rows = Math.Max(_map.RowCount, _map.Seats.Max(s => s.RowIndex) + 1);
+        int cols = Math.Max(_map.ColCount, _map.Seats.Max(s => s.ColIndex + s.ColumnSpan));
+
+        var grid = new TableLayoutPanel
+        {
+            RowCount = rows,
+            ColumnCount = cols,
             Dock = DockStyle.Fill,
-            Padding = new Padding(10)
+            Padding = new Padding(8),
+            BackColor = BackColor
+        };
+        for (int c = 0; c < cols; c++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / cols));
+        for (int r = 0; r < rows; r++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / rows));
+
+        float fontSize = cols > 14 ? 7F : 8.5F;
+        foreach (var seat in _map.Seats)
+        {
+            var btn = new Button
+            {
+                Text = seat.SeatNumber,
+                Tag = seat.SeatId,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(2),
+                Font = new Font("Segoe UI", fontSize, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat
+            };
+            btn.FlatAppearance.BorderSize = 0;
+            btn.Click += SeatButton_Click;
+
+            grid.Controls.Add(btn, seat.ColIndex, seat.RowIndex);
+            if (seat.ColumnSpan > 1) grid.SetColumnSpan(btn, seat.ColumnSpan);
+
+            _buttons[seat.SeatId] = btn;
+            ApplyStyle(seat);
+        }
+
+        var screen = new Label
+        {
+            Text = "━━━━━━━━━━  MÀN HÌNH  ━━━━━━━━━━",
+            Dock = DockStyle.Top,
+            Height = 26,
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = ColorTranslator.FromHtml("#94a3b8"),
+            Font = new Font("Segoe UI", 9F, FontStyle.Bold)
         };
 
-        for (int i = 0; i < 10; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 10f));
-        for (int i = 0; i < 8; i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 12.5f));
+        Controls.Add(grid);
+        Controls.Add(screen);
+        ResumeLayout();
+    }
 
-        char[] rows = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H' };
+    private void ApplyStyle(SeatStatusDto seat)
+    {
+        if (!_buttons.TryGetValue(seat.SeatId, out var btn)) return;
 
-        for (int r = 0; r < 8; r++)
+        string typeLabel = SeatTypes.ToDisplay(seat.SeatType);
+        Color baseColor = seat.SeatType switch
         {
-            for (int c = 1; c <= 10; c++)
+            SeatTypes.Vip => ColorVip,
+            SeatTypes.Couple => ColorCouple,
+            _ => ColorAvailable
+        };
+
+        switch (seat.State)
+        {
+            case SeatState.Sold:
+                btn.BackColor = ColorSold;
+                btn.ForeColor = ColorTranslator.FromHtml("#94a3b8");
+                btn.Enabled = false;
+                btn.Cursor = Cursors.No;
+                break;
+            case SeatState.HeldByOther:
+                btn.BackColor = ColorHeldByOther;
+                btn.ForeColor = ColorTranslator.FromHtml("#fca5a5");
+                btn.Enabled = false;
+                btn.Cursor = Cursors.No;
+                break;
+            case SeatState.HeldByMe:
+                btn.BackColor = ColorSelected;
+                btn.ForeColor = ColorTranslator.FromHtml("#101418");
+                btn.Enabled = true;
+                btn.Cursor = Cursors.Hand;
+                break;
+            default:
+                btn.BackColor = baseColor;
+                btn.ForeColor = ColorTranslator.FromHtml("#101418");
+                btn.Enabled = true;
+                btn.Cursor = Cursors.Hand;
+                break;
+        }
+
+        _toolTip.SetToolTip(btn, $"Ghế {seat.SeatNumber} ({typeLabel}) - {seat.Price:N0} đ");
+    }
+
+    private void SeatButton_Click(object? sender, EventArgs e)
+    {
+        if (_map == null || sender is not Button { Tag: int seatId }) return;
+        var seat = _map.Seats.FirstOrDefault(s => s.SeatId == seatId);
+        if (seat == null) return;
+
+        try
+        {
+            if (seat.State == SeatState.HeldByMe)
             {
-                string seatCode = $"{rows[r]}{c}";
-                Button btnSeat = new Button
+                _seatHoldService.ReleaseSeat(ShowtimeId, seatId, SessionId);
+                seat.State = SeatState.Available;
+            }
+            else if (seat.State == SeatState.Available)
+            {
+                if (_seatHoldService.TryHoldSeat(ShowtimeId, seatId, SessionId, out string message))
                 {
-                    Text = seatCode,
-                    Tag = seatCode,
-                    Dock = DockStyle.Fill,
-                    Margin = new Padding(4),
-                    Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                    FlatStyle = FlatStyle.Flat,
-                    Cursor = Cursors.Hand
-                };
-                btnSeat.FlatAppearance.BorderSize = 0;
-                if (_bookedSeats.Contains(seatCode))
-                {
-                    btnSeat.BackColor = ColorTranslator.FromHtml("#475569");
-                    btnSeat.ForeColor = ColorTranslator.FromHtml("#94A3B8");
-                    btnSeat.Enabled = false;
-                }
-                else if (_heldSeats.Contains(seatCode))
-                {
-                    btnSeat.BackColor = ColorTranslator.FromHtml("#ef4444");
-                    btnSeat.ForeColor = Color.White;
-                    btnSeat.Enabled = false;
+                    seat.State = SeatState.HeldByMe;
                 }
                 else
                 {
-                    btnSeat.BackColor = ColorTranslator.FromHtml("#1e293b");
-                    btnSeat.ForeColor = Color.White;
-                    btnSeat.Click += SeatButton_Click;
+                    MessageBox.Show(message, "Không thể chọn ghế", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    RefreshStates();
+                    return;
                 }
-
-                grid.Controls.Add(btnSeat, c - 1, r);
             }
-        }
 
-        this.Controls.Add(grid);
-    }
-    private void SeatButton_Click(object? sender, EventArgs e)
-    {
-        if (sender is Button btn && btn.Tag is string seatCode)
+            ApplyStyle(seat);
+            OnSeatSelectionChanged?.Invoke(SelectedSeatNumbers);
+        }
+        catch (Exception ex)
         {
-            if (_selectedSeats.Contains(seatCode))
-            {
-                _selectedSeats.Remove(seatCode);
-                btn.BackColor = ColorTranslator.FromHtml("#1e293b");
-                btn.ForeColor = Color.White;
-            }
-            else
-            {
-                _selectedSeats.Add(seatCode);
-                btn.BackColor = ColorTranslator.FromHtml("#ffb961");
-                btn.ForeColor = ColorTranslator.FromHtml("#101418");
-            }
-
-            OnSeatSelectionChanged?.Invoke(_selectedSeats);
+            MessageBox.Show("Lỗi khi giữ ghế: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            RefreshStates();
         }
     }
-    }
 
-    
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _refreshTimer.Stop();
+            _refreshTimer.Dispose();
+            _toolTip.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+}

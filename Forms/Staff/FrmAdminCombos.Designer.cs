@@ -23,8 +23,8 @@
             this.lnkPos = new System.Windows.Forms.LinkLabel();
             this.lblLogo = new System.Windows.Forms.Label();
             this.btnAddComboTop = new System.Windows.Forms.Button();
-            this.btnUpdatePrice = new System.Windows.Forms.Button();
-            this.btnImportStore = new System.Windows.Forms.Button();
+            this.btnEditCombo = new System.Windows.Forms.Button();
+            this.btnDeleteCombo = new System.Windows.Forms.Button();
             this.btnExportExcel = new System.Windows.Forms.Button();
             this.txtSearch = new System.Windows.Forms.TextBox();
             this.dgvCombos = new System.Windows.Forms.DataGridView();
@@ -32,9 +32,8 @@
             this.colImage = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.colNameDesc = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.colCategory = new System.Windows.Forms.DataGridViewTextBoxColumn();
-            this.colCostPrice = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.colImageFile = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.colListPrice = new System.Windows.Forms.DataGridViewTextBoxColumn();
-            this.colStock = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.lblFooterStatus = new System.Windows.Forms.Label();
             this.pnlSidebar.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dgvCombos)).BeginInit();
@@ -128,27 +127,27 @@
             this.btnAddComboTop.Text = "+ Thêm Combo Mới";
             this.btnAddComboTop.UseVisualStyleBackColor = false;
 
-            this.btnUpdatePrice.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(41)))), ((int)(((byte)(59)))));
-            this.btnUpdatePrice.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnUpdatePrice.Font = new System.Drawing.Font("Segoe UI", 8.5F);
-            this.btnUpdatePrice.ForeColor = System.Drawing.Color.White;
-            this.btnUpdatePrice.Location = new System.Drawing.Point(375, 15);
-            this.btnUpdatePrice.Name = "btnUpdatePrice";
-            this.btnUpdatePrice.Size = new System.Drawing.Size(120, 30);
-            this.btnUpdatePrice.TabIndex = 2;
-            this.btnUpdatePrice.Text = "Cập nhật Giá sỉ/lẻ";
-            this.btnUpdatePrice.UseVisualStyleBackColor = false;
+            this.btnEditCombo.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(41)))), ((int)(((byte)(59)))));
+            this.btnEditCombo.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnEditCombo.Font = new System.Drawing.Font("Segoe UI", 8.5F);
+            this.btnEditCombo.ForeColor = System.Drawing.Color.White;
+            this.btnEditCombo.Location = new System.Drawing.Point(375, 15);
+            this.btnEditCombo.Name = "btnEditCombo";
+            this.btnEditCombo.Size = new System.Drawing.Size(120, 30);
+            this.btnEditCombo.TabIndex = 2;
+            this.btnEditCombo.Text = "✏ Sửa combo";
+            this.btnEditCombo.UseVisualStyleBackColor = false;
 
-            this.btnImportStore.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(41)))), ((int)(((byte)(59)))));
-            this.btnImportStore.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnImportStore.Font = new System.Drawing.Font("Segoe UI", 8.5F);
-            this.btnImportStore.ForeColor = System.Drawing.Color.White;
-            this.btnImportStore.Location = new System.Drawing.Point(505, 15);
-            this.btnImportStore.Name = "btnImportStore";
-            this.btnImportStore.Size = new System.Drawing.Size(100, 30);
-            this.btnImportStore.TabIndex = 3;
-            this.btnImportStore.Text = "Nhập kho FB";
-            this.btnImportStore.UseVisualStyleBackColor = false;
+            this.btnDeleteCombo.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(41)))), ((int)(((byte)(59)))));
+            this.btnDeleteCombo.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnDeleteCombo.Font = new System.Drawing.Font("Segoe UI", 8.5F);
+            this.btnDeleteCombo.ForeColor = System.Drawing.Color.White;
+            this.btnDeleteCombo.Location = new System.Drawing.Point(505, 15);
+            this.btnDeleteCombo.Name = "btnDeleteCombo";
+            this.btnDeleteCombo.Size = new System.Drawing.Size(100, 30);
+            this.btnDeleteCombo.TabIndex = 3;
+            this.btnDeleteCombo.Text = "🗑 Xóa";
+            this.btnDeleteCombo.UseVisualStyleBackColor = false;
 
             this.btnExportExcel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(41)))), ((int)(((byte)(59)))));
             this.btnExportExcel.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -169,7 +168,7 @@
             this.txtSearch.Name = "txtSearch";
             this.txtSearch.Size = new System.Drawing.Size(300, 24);
             this.txtSearch.TabIndex = 5;
-            this.txtSearch.Text = "🔍 Tìm kiếm SKU, tên combo...";
+            this.txtSearch.Text = "🔍 Tìm theo mã hoặc tên combo...";
 
             this.dgvCombos.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dgvCombos.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
@@ -177,16 +176,15 @@
             this.colImage,
             this.colNameDesc,
             this.colCategory,
-            this.colCostPrice,
-            this.colListPrice,
-            this.colStock});
+            this.colImageFile,
+            this.colListPrice});
             this.dgvCombos.Location = new System.Drawing.Point(240, 105);
             this.dgvCombos.Name = "dgvCombos";
             this.dgvCombos.RowHeadersVisible = false;
             this.dgvCombos.Size = new System.Drawing.Size(1010, 550);
             this.dgvCombos.TabIndex = 6;
 
-            this.colSku.HeaderText = "MÃ SKU";
+            this.colSku.HeaderText = "MÃ COMBO";
             this.colSku.Name = "colSku";
             this.colSku.Width = 110;
 
@@ -196,23 +194,19 @@
 
             this.colNameDesc.HeaderText = "TÊN MÓN / COMBO";
             this.colNameDesc.Name = "colNameDesc";
-            this.colNameDesc.Width = 300;
+            this.colNameDesc.Width = 380;
 
-            this.colCategory.HeaderText = "PHÂN LOẠI";
+            this.colCategory.HeaderText = "TRẠNG THÁI";
             this.colCategory.Name = "colCategory";
             this.colCategory.Width = 150;
 
-            this.colCostPrice.HeaderText = "GIÁ VỐN";
-            this.colCostPrice.Name = "colCostPrice";
-            this.colCostPrice.Width = 120;
+            this.colImageFile.HeaderText = "FILE ẢNH";
+            this.colImageFile.Name = "colImageFile";
+            this.colImageFile.Width = 120;
 
-            this.colListPrice.HeaderText = "GIÁ NIÊM YẾT";
+            this.colListPrice.HeaderText = "GIÁ BÁN";
             this.colListPrice.Name = "colListPrice";
             this.colListPrice.Width = 130;
-
-            this.colStock.HeaderText = "TỒN";
-            this.colStock.Name = "colStock";
-            this.colStock.Width = 110;
 
             this.lblFooterStatus.AutoSize = true;
             this.lblFooterStatus.Font = new System.Drawing.Font("Segoe UI", 9F);
@@ -230,8 +224,8 @@
             this.Controls.Add(this.dgvCombos);
             this.Controls.Add(this.txtSearch);
             this.Controls.Add(this.btnExportExcel);
-            this.Controls.Add(this.btnImportStore);
-            this.Controls.Add(this.btnUpdatePrice);
+            this.Controls.Add(this.btnDeleteCombo);
+            this.Controls.Add(this.btnEditCombo);
             this.Controls.Add(this.btnAddComboTop);
             this.Controls.Add(this.pnlSidebar);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
@@ -254,8 +248,8 @@
         public System.Windows.Forms.LinkLabel lnkReports;
         public System.Windows.Forms.LinkLabel lnkOccupancy;
         public System.Windows.Forms.Button btnAddComboTop;
-        public System.Windows.Forms.Button btnUpdatePrice;
-        public System.Windows.Forms.Button btnImportStore;
+        public System.Windows.Forms.Button btnEditCombo;
+        public System.Windows.Forms.Button btnDeleteCombo;
         public System.Windows.Forms.Button btnExportExcel;
         public System.Windows.Forms.TextBox txtSearch;
         public System.Windows.Forms.DataGridView dgvCombos;
@@ -263,9 +257,8 @@
         public System.Windows.Forms.DataGridViewTextBoxColumn colImage;
         public System.Windows.Forms.DataGridViewTextBoxColumn colNameDesc;
         public System.Windows.Forms.DataGridViewTextBoxColumn colCategory;
-        public System.Windows.Forms.DataGridViewTextBoxColumn colCostPrice;
+        public System.Windows.Forms.DataGridViewTextBoxColumn colImageFile;
         public System.Windows.Forms.DataGridViewTextBoxColumn colListPrice;
-        public System.Windows.Forms.DataGridViewTextBoxColumn colStock;
         public System.Windows.Forms.Label lblFooterStatus;
     }
 }

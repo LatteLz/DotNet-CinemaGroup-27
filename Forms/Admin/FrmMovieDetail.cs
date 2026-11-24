@@ -1,6 +1,6 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
+﻿using CinemaManagement.Helpers;
+using CinemaManagement.Models;
+using CinemaManagement.Services;
 
 namespace CinemaManagement.Forms.Admin
 {
@@ -37,13 +37,197 @@ namespace CinemaManagement.Forms.Admin
             txtDescription;
 
         private Label lblCharCount;
-        private Button btnSave, btnSaveDraft, btnCancel, btnUploadPoster;
+        private Button btnSave, btnCancel, btnUploadPoster;
         private string selectedAgeRating = "P";
         private Panel pnlAgeChipsContainer;
 
-        public FrmMovieDetail()
+        private readonly MovieService _movieService = new();
+        private readonly ErrorProvider _errors = new();
+        private readonly int _movieId;
+        private Movie? _movie;
+        private Panel _pnlGenres = null!;
+        private List<string> _extraGenres = new();
+        private string? _uploadedPosterFile;
+
+        public FrmMovieDetail() : this(0) { }
+
+        public FrmMovieDetail(int movieId)
         {
+            _movieId = movieId;
+            if (movieId > 0)
+            {
+                try
+                {
+                    _movie = _movieService.GetById(movieId);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Không đọc được thông tin phim: " + ex.Message, "Lỗi CSDL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                if (!string.IsNullOrWhiteSpace(_movie?.AgeRating)) selectedAgeRating = _movie!.AgeRating!;
+            }
+
             InitializeCustomComponent();
+            AppSession.RequireAdmin(this);
+            _errors.ContainerControl = this;
+
+            txtTitleEn.PlaceholderText = "Ví dụ: Spider-Man";
+            txtReleaseDate.PlaceholderText = "dd/MM/yyyy";
+            txtTrailerUrl.PlaceholderText = "https://www.youtube.com/watch?v=...";
+            txtDescription.MaxLength = 2000;
+            txtDescription.TextChanged += (_, _) => UpdateCharCount();
+
+            FillFromMovie();
+            WindowLayout.ScaleToStandard(this);
+        }
+
+        private void FillFromMovie()
+        {
+            if (_movie == null)
+            {
+                Text = "Thêm phim mới";
+                UpdateCharCount();
+                return;
+            }
+
+            Text = $"Chi tiết phim: {_movie.Title}";
+            txtTitleVi.Text = _movie.Title;
+            txtTitleEn.Text = _movie.OriginalTitle ?? "";
+            txtReleaseDate.Text = _movie.ReleaseDate?.ToString("dd/MM/yyyy") ?? "";
+            txtTrailerUrl.Text = _movie.TrailerUrl ?? "";
+            txtDuration.Text = _movie.Duration.ToString();
+            txtCountry.Text = _movie.Country ?? "";
+            txtDirector.Text = _movie.Director ?? "";
+            txtActors.Text = _movie.Actors ?? "";
+            txtDescription.Text = _movie.Description ?? "";
+            UpdateCharCount();
+            picPoster.Image = ImageHelper.Load(_movie.PosterPath);
+
+            var genres = (_movie.Genre ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            foreach (CheckBox chk in _pnlGenres.Controls.OfType<CheckBox>())
+            {
+                chk.Checked = genres.Any(g => g.Equals(chk.Text, StringComparison.OrdinalIgnoreCase));
+            }
+            _extraGenres = genres
+                .Where(g => !_pnlGenres.Controls.OfType<CheckBox>().Any(c => c.Text.Equals(g, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+        }
+
+        private void SaveMovie()
+        {
+            _errors.Clear();
+            bool ok = true;
+
+            if (string.IsNullOrWhiteSpace(txtTitleVi.Text))
+            {
+                _errors.SetError(txtTitleVi, "Tên phim không được để trống");
+                ok = false;
+            }
+            if (!int.TryParse(txtDuration.Text.Trim(), out int duration) || duration <= 0 || duration > 400)
+            {
+                _errors.SetError(txtDuration, "Thời lượng là số phút từ 1 đến 400");
+                ok = false;
+            }
+            var checkedGenres = _pnlGenres.Controls.OfType<CheckBox>().Where(c => c.Checked).Select(c => c.Text).ToList();
+            if (checkedGenres.Count == 0 && _extraGenres.Count == 0)
+            {
+                _errors.SetError(_pnlGenres, "Chọn ít nhất một thể loại");
+                ok = false;
+            }
+            DateTime? releaseDate = null;
+            string releaseText = txtReleaseDate.Text.Trim();
+            if (releaseText.Length > 0)
+            {
+                if (DateTime.TryParseExact(releaseText, new[] { "dd/MM/yyyy", "d/M/yyyy" },
+                        System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsed)
+                    && parsed.Year >= 1900 && parsed.Year <= DateTime.Today.Year + 5)
+                {
+                    releaseDate = parsed;
+                }
+                else
+                {
+                    _errors.SetError(txtReleaseDate, "Ngày khởi chiếu theo dạng dd/MM/yyyy, ví dụ 25/12/2026");
+                    ok = false;
+                }
+            }
+            string trailer = txtTrailerUrl.Text.Trim();
+            if (trailer.Length > 0 && !IsHttpUrl(trailer))
+            {
+                _errors.SetError(txtTrailerUrl, "Đường dẫn phải bắt đầu bằng http:// hoặc https://");
+                ok = false;
+            }
+            if (txtTitleEn.Text.Trim().Length > 200)
+            {
+                _errors.SetError(txtTitleEn, "Tối đa 200 ký tự");
+                ok = false;
+            }
+            if (txtDescription.Text.Length > 2000)
+            {
+                _errors.SetError(txtDescription, "Tối đa 2000 ký tự");
+                ok = false;
+            }
+            if (!ok) return;
+
+            string? oldPoster = _movie?.PosterPath;
+            string? newPoster = null;
+            try
+            {
+                if (_uploadedPosterFile != null)
+                    newPoster = ImageHelper.SavePosterCopy(_uploadedPosterFile);
+
+                var movie = new Movie
+                {
+                    MovieId = _movieId,
+                    Title = txtTitleVi.Text.Trim(),
+                    OriginalTitle = NullIfEmpty(txtTitleEn.Text),
+                    ReleaseDate = releaseDate,
+                    TrailerUrl = NullIfEmpty(trailer),
+                    Duration = duration,
+                    Genre = string.Join(", ", checkedGenres.Concat(_extraGenres)),
+                    AgeRating = selectedAgeRating,
+                    Country = NullIfEmpty(txtCountry.Text),
+                    Director = NullIfEmpty(txtDirector.Text),
+                    Actors = NullIfEmpty(txtActors.Text),
+                    Description = NullIfEmpty(txtDescription.Text),
+                    PosterPath = newPoster ?? oldPoster
+                };
+
+                if (_movieId > 0) _movieService.Update(movie);
+                else _movieService.Add(movie);
+
+                if (newPoster != null && !string.Equals(newPoster, oldPoster, StringComparison.OrdinalIgnoreCase))
+                    ImageHelper.DeleteUploadedPoster(oldPoster);
+
+                MessageBox.Show("Đã lưu phim thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                DialogResult = DialogResult.OK;
+                Close();
+            }
+            catch (BusinessException ex)
+            {
+                RemoveUnsavedPoster(newPoster, oldPoster);
+                MessageBox.Show(ex.Message, "Dữ liệu không hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                RemoveUnsavedPoster(newPoster, oldPoster);
+                MessageBox.Show("Không lưu được phim: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private static void RemoveUnsavedPoster(string? newPoster, string? oldPoster)
+        {
+            if (newPoster != null && !string.Equals(newPoster, oldPoster, StringComparison.OrdinalIgnoreCase))
+                ImageHelper.DeleteUploadedPoster(newPoster);
+        }
+
+        private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+        private static bool IsHttpUrl(string url)
+            => Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+        private void UpdateCharCount()
+        {
+            lblCharCount.Text = $"Ký tự: {txtDescription.Text.Length} / 2000";
         }
 
         private void InitializeCustomComponent()
@@ -89,7 +273,7 @@ namespace CinemaManagement.Forms.Admin
             };
             Label lblUser = new Label
             {
-                Text = "Trần Văn A\nGiám đốc Vận hành Chiếu phim",
+                Text = $"{AppSession.DisplayName}\n{(AppSession.IsAdmin ? "Quản trị viên" : "Nhân viên")}",
                 ForeColor = COLOR_TEXT_LABEL,
                 Font = new Font("Segoe UI", 9f, FontStyle.Regular),
                 Location = new Point(1250, 15),
@@ -154,7 +338,9 @@ namespace CinemaManagement.Forms.Admin
             };
             btnUploadPoster = CreateCustomButton("📁 Tải ảnh Poster từ máy...", COLOR_PRIMARY, COLOR_TEXT_PRIMARY, new Point(0, 515), new Size(320, 36));
             btnUploadPoster.Click += btnUploadPoster_Click;
-            txtTrailerUrl = CreateStyledTextBox("", new Point(0, 580), 320);
+            txtTrailerUrl = CreateStyledTextBox("", new Point(0, 580), 246);
+            var btnWatchTrailer = CreateCustomButton("▶ Xem", COLOR_SECONDARY_BTN, COLOR_TEXT_PRIMARY, new Point(252, 578), new Size(68, 28));
+            btnWatchTrailer.Click += (_, _) => OpenTrailerLink(txtTrailerUrl.Text.Trim());
             Label lblTrailer = new Label
             {
                 Text = "🎬 Đường dẫn Trailer / Video giới thiệu", Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
@@ -166,6 +352,7 @@ namespace CinemaManagement.Forms.Admin
             pnlLeftCol.Controls.Add(btnUploadPoster);
             pnlLeftCol.Controls.Add(lblTrailer);
             pnlLeftCol.Controls.Add(txtTrailerUrl);
+            pnlLeftCol.Controls.Add(btnWatchTrailer);
 
             Panel pnlRightCol = new Panel
                 { Location = new Point(364, 75), Size = new Size(690, 660), BackColor = Color.Transparent };
@@ -173,13 +360,13 @@ namespace CinemaManagement.Forms.Admin
             Label lblNameVi = CreateFieldLabel("Tên phim (Tiếng Việt) *", new Point(0, 0));
             txtTitleVi = CreateStyledTextBox("", new Point(0, 22), 330);
 
-            Label lblNameEn = CreateFieldLabel("Tên gốc (Tiếng Anh) *", new Point(350, 0));
+            Label lblNameEn = CreateFieldLabel("Tên gốc (Tiếng Anh)", new Point(350, 0));
             txtTitleEn = CreateStyledTextBox("", new Point(350, 22), 330);
 
             Label lblDuration = CreateFieldLabel("Thời lượng (Phút) *", new Point(0, 65));
             txtDuration = CreateStyledTextBox("", new Point(0, 87), 160);
 
-            Label lblRelease = CreateFieldLabel("Ngày khởi chiếu *", new Point(180, 65));
+            Label lblRelease = CreateFieldLabel("Ngày khởi chiếu", new Point(180, 65));
             txtReleaseDate = CreateStyledTextBox("", new Point(180, 87), 150);
 
             Label lblCountry = CreateFieldLabel("Quốc gia sản xuất", new Point(350, 65));
@@ -189,7 +376,7 @@ namespace CinemaManagement.Forms.Admin
             pnlAgeChipsContainer = CreateAgeRatingChips(new Point(0, 152));
 
             Label lblGenreTitle = CreateFieldLabel("Thể loại phim (Chọn nhiều) *", new Point(0, 210));
-            Panel pnlGenres = CreateGenreCheckboxes(new Point(0, 232));
+            Panel pnlGenres = _pnlGenres = CreateGenreCheckboxes(new Point(0, 232));
 
             Label lblDirector = CreateFieldLabel("Đạo diễn", new Point(0, 290));
             txtDirector = CreateStyledTextBox("", new Point(0, 312), 330);
@@ -220,17 +407,9 @@ namespace CinemaManagement.Forms.Admin
                 new Size(120, 38));
             btnCancel.Click += (s, e) => this.Close();
 
-            btnSaveDraft = CreateCustomButton("💾 Lưu nháp", COLOR_SECONDARY_BTN, COLOR_TEXT_PRIMARY,
-                new Point(400, 520), new Size(110, 38));
-
-            btnSave = CreateCustomButton("✔ Lưu & Áp dụng", COLOR_PRIMARY, COLOR_TEXT_PRIMARY, new Point(520, 520),
+            btnSave = CreateCustomButton("✔ Lưu && Áp dụng", COLOR_PRIMARY, COLOR_TEXT_PRIMARY, new Point(520, 520),
                 new Size(160, 38));
-            btnSave.Click += (s, e) =>
-            {
-                MessageBox.Show("Đã lưu phim thành công!", "Thông báo", MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                this.Close();
-            };
+            btnSave.Click += (s, e) => SaveMovie();
 
             pnlRightCol.Controls.AddRange(new Control[]
             {
@@ -239,7 +418,7 @@ namespace CinemaManagement.Forms.Admin
                 lblAgeTitle, pnlAgeChipsContainer, lblGenreTitle, pnlGenres,
                 lblDirector, txtDirector, lblActors, txtActors,
                 lblDesc, lblCharCount, txtDescription,
-                btnCancel, btnSaveDraft, btnSave
+                btnCancel, btnSave
             });
 
             pnlMainModal.Controls.Add(lblFormTitle);
@@ -349,7 +528,7 @@ namespace CinemaManagement.Forms.Admin
         private Panel CreateGenreCheckboxes(Point loc)
         {
             Panel pnl = new Panel { Location = loc, Size = new Size(680, 45), BackColor = Color.Transparent };
-            string[] genres = { "Hành động", "Phiêu lưu", "Khoa học viễn tưởng", "Chính kịch", "Hoạt hình", "Kinh dị" };
+            string[] genres = { "Hành động", "Phiêu lưu", "Viễn tưởng", "Hoạt hình", "Kinh dị", "Hài", "Gia đình", "Tâm lý", "Trinh thám", "Hình sự" };
 
             int xPos = 0, yPos = 0;
             for (int i = 0; i < genres.Length; i++)
@@ -357,15 +536,17 @@ namespace CinemaManagement.Forms.Admin
                 CheckBox chk = new CheckBox
                 {
                     Text = genres[i],
-                    AutoSize = true,
+                    AutoSize = false,
+                    Size = new Size(130, 22),
+                    AutoEllipsis = true,
                     Location = new Point(xPos, yPos),
                     ForeColor = COLOR_TEXT_PRIMARY,
                     Font = new Font("Segoe UI", 9f),
                     Checked = false
                 };
                 pnl.Controls.Add(chk);
-                xPos += 115;
-                if (i == 3)
+                xPos += 135;
+                if (i == 4)
                 {
                     xPos = 0;
                     yPos += 22;
@@ -373,24 +554,6 @@ namespace CinemaManagement.Forms.Admin
             }
 
             return pnl;
-        }
-
-        public void LoadMovieData(string titleVi, string titleEn, int durationMinutes, string releaseDate,
-            string country, string director, string actors, string posterPath, string description)
-        {
-            txtTitleVi.Text = titleVi;
-            txtTitleEn.Text = titleEn;
-            txtDuration.Text = durationMinutes.ToString();
-            txtReleaseDate.Text = releaseDate;
-            txtCountry.Text = country;
-            txtDirector.Text = director;
-            txtActors.Text = actors;
-            txtDescription.Text = description;
-
-            if (!string.IsNullOrEmpty(posterPath) && System.IO.File.Exists(posterPath))
-            {
-                picPoster.Image = Image.FromFile(posterPath);
-            }
         }
 
         private void btnUploadPoster_Click(object sender, EventArgs e)
@@ -402,8 +565,14 @@ namespace CinemaManagement.Forms.Admin
 
                 if (openFileDialog.ShowDialog() == DialogResult.OK)
                 {
-                    picPoster.Image = Image.FromFile(openFileDialog.FileName);
-                    picPoster.Tag = openFileDialog.FileName;
+                    var img = ImageHelper.Load(openFileDialog.FileName);
+                    if (img == null)
+                    {
+                        MessageBox.Show("Không đọc được file ảnh đã chọn.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                    picPoster.Image = img;
+                    _uploadedPosterFile = openFileDialog.FileName;
                 }
             }
         }

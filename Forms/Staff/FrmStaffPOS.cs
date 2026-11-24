@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data.SQLite;
-using System.Drawing;
-using System.Globalization;
-using System.IO;
-using System.Windows.Forms;
-using CinemaManagement.Controls;
-using CinemaManagement.Data;
+﻿using CinemaManagement.Controls;
+using CinemaManagement.Forms.Shared;
+using CinemaManagement.Helpers;
 using CinemaManagement.Models;
+using CinemaManagement.Services;
 
 namespace CinemaManagement.Forms.Staff
 {
@@ -18,90 +13,163 @@ namespace CinemaManagement.Forms.Staff
         private readonly Color ColorCardBg = ColorTranslator.FromHtml("#181c20");
         private readonly Color ColorCardActive = ColorTranslator.FromHtml("#0284c7");
 
-        private int loggedInUserId;
-        private string loggedInUserName;
+        private readonly MovieService _movieService = new();
+        private readonly ShowtimeService _showtimeService = new();
+        private readonly ComboService _comboService = new();
+        private readonly BookingService _bookingService = new();
+
         private decimal currentTotal = 0;
         private decimal currentTicketRevenue = 0;
         private decimal currentComboRevenue = 0;
-        private string selectedMovie = "";
-        private string selectedShowtime = "";
-        private decimal selectedTicketPrice = 110000;
-        private int selectedShowtimeId = 101;
-        private string connectionString = "Data Source=cinema.db;Version=3;";
 
-        private List<MovieDetail> dbMovies = new List<MovieDetail>();
-        private List<ShowtimeDetail> dbShowtimes = new List<ShowtimeDetail>();
-        private Dictionary<string, SeatDetail> dbSeats = new Dictionary<string, SeatDetail>();
-        private List<ComboDetail> dbCombos = new List<ComboDetail>();
+        private int selectedMovieId;
+        private int selectedShowtimeId;
 
-        private List<string> selectedSeats = new List<string>();
-        private List<ComboDetail> selectedCombos = new List<ComboDetail>();
+        private List<Movie> dbMovies = new();
+        private List<ShowtimeListItemDto> dbShowtimes = new();
+        private List<ComboItem> dbCombos = new();
 
-        private FlowLayoutPanel pnlDynamicMovies;
-        private FlowLayoutPanel pnlDynamicShowtimes;
-        private SeatMapControl seatMapControl;
-        private ErrorProvider errorProvider = new ErrorProvider();
+        private readonly Dictionary<int, int> selectedCombos = new();
 
-        private class MovieDetail
-        {
-            public int MovieId { get; set; }
-            public string Title { get; set; }
-            public string Duration { get; set; }
-            public string Genre { get; set; }
-            public string AgeRating { get; set; }
-        }
+        private FlowLayoutPanel pnlDynamicMovies = null!;
+        private FlowLayoutPanel pnlDynamicShowtimes = null!;
+        private SeatMapControl seatMapControl = null!;
+        private readonly ErrorProvider errorProvider = new();
+        private readonly ToolTip _showtimeTip = new();
 
-        private class ShowtimeDetail
-        {
-            public int ShowtimeId { get; set; }
-            public int MovieId { get; set; }
-            public int RoomId { get; set; }
-            public string StartTime { get; set; }
-            public string RoomName { get; set; }
-            public decimal Price { get; set; }
-        }
-
-        private class SeatDetail
-        {
-            public string SeatNumber { get; set; }
-            public string SeatType { get; set; }
-            public decimal Price { get; set; }
-        }
-
-        private class ComboDetail
-        {
-            public int ComboId { get; set; }
-            public string Name { get; set; }
-            public decimal Price { get; set; }
-            public string Description { get; set; }
-        }
-
-        public FrmStaffPOS() : this(1, "Julian Vance")
-        {
-        }
-
-        public FrmStaffPOS(int userId, string userName)
+        public FrmStaffPOS()
         {
             InitializeComponent();
-            loggedInUserId = userId;
-            loggedInUserName = userName;
+            AppSession.RequireLogin(this);
 
             SetupCustomUI();
             BindPaymentMethodEvents();
             SetupEvents();
-            LoadFullMoviesFromDatabase();
-            LoadShowtimesFromDatabase();
-            LoadSeatsFromDatabase();
-            LoadCombosFromDatabase();
+            InitializeSeatMapControl();
+            ReloadCatalog();
+            ApplyPaymentModeUI();
+            UpdateTotalDisplay();
+
+            FormClosed += (_, _) =>
+            {
+                try { new SeatHoldService().ReleaseSession(seatMapControl.SessionId); } catch { }
+            };
+            WindowLayout.ApplyStandardSize(this);
+            Resize += (_, _) => ArrangeLayout();
+            ArrangeLayout();
+        }
+
+        private float DpiScale => DeviceDpi / 96f;
+
+        private int S(int value) => (int)Math.Round(value * DpiScale);
+
+        private readonly Font _badgeFont = new("Segoe UI", 7.5F, FontStyle.Bold);
+        private readonly Font _movieTitleFont = new("Segoe UI", 8.5F, FontStyle.Bold);
+        private readonly Font _movieSubFont = new("Segoe UI", 7F);
+        private readonly Font _showtimeFont = new("Segoe UI", 8F, FontStyle.Bold);
+
+        private static int TextHeight(Font font) => TextRenderer.MeasureText("ÁgỹĐ", font).Height;
+        private int BadgeHeight => TextHeight(_badgeFont) + S(2);
+        private int MovieTitleTop => S(5) + BadgeHeight + S(3);
+        private int MovieSubTop => MovieTitleTop + TextHeight(_movieTitleFont) + S(2);
+        private int MovieCardHeight => MovieSubTop + TextHeight(_movieSubFont) + S(8);
+        private int ShowtimeButtonHeight => TextHeight(_showtimeFont) + S(16);
+        private const int ItemMargin = 3;
+
+        private static void VerticalScrollOnly(FlowLayoutPanel panel)
+        {
+            panel.AutoScroll = false;
+            panel.HorizontalScroll.Maximum = 0;
+            panel.HorizontalScroll.Visible = false;
+            panel.HorizontalScroll.Enabled = false;
+            panel.VerticalScroll.Visible = true;
+            panel.AutoScroll = true;
+        }
+
+        private static void ClearAndDispose(Control parent)
+        {
+            var old = parent.Controls.Cast<Control>().ToList();
+            parent.Controls.Clear();
+            if (parent.IsHandleCreated)
+                parent.BeginInvoke(new Action(() => old.ForEach(c => c.Dispose())));
+            else
+                old.ForEach(c => c.Dispose());
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            ArrangeLayout();
+        }
+
+        protected override void OnDpiChanged(DpiChangedEventArgs e)
+        {
+            base.OnDpiChanged(e);
+            ArrangeLayout();
+        }
+
+        private void ArrangeLayout()
+        {
+            if (seatMapControl == null || pnlDynamicMovies == null || pnlDynamicShowtimes == null) return;
+            int w = ClientSize.Width, h = ClientSize.Height;
+            if (w <= 0 || h <= 0) return;
+
+            SuspendLayout();
+            int gap = S(10);
+            int left = pnlSidebar.Right + gap;
+            int usable = w - left - gap * 2;
+            int leftW = (int)(usable * 0.54);
+            int right = left + leftW + gap;
+            int rightW = w - right - gap;
+
+            int y = S(8);
+            int moviesH = 2 * (MovieCardHeight + ItemMargin * 2) + S(4);
+            pnlDynamicMovies.SetBounds(left, y, leftW, moviesH);
+            y += moviesH + S(6);
+
+            int showsH = 2 * (ShowtimeButtonHeight + ItemMargin * 2) + S(4);
+            pnlDynamicShowtimes.SetBounds(left, y, leftW, showsH);
+            y += showsH + S(6);
+
+            int comboH = Math.Max(S(130), (int)(h * 0.2));
+            int comboTop = h - S(8) - comboH;
+            seatMapControl.SetBounds(left, y, leftW, Math.Max(S(220), comboTop - S(8) - y));
+            if (pnlComboCatalog != null) pnlComboCatalog.SetBounds(left, comboTop, leftW, comboH);
+
+            int bottom = h - S(8);
+            btnCancelOrder.SetBounds(right, bottom - btnCancelOrder.Height, rightW, btnCancelOrder.Height);
+            bottom = btnCancelOrder.Top - S(8);
+            btnCheckout.SetBounds(right, bottom - btnCheckout.Height, rightW, btnCheckout.Height);
+            bottom = btnCheckout.Top - S(8);
+            pnlCashBox.SetBounds(right, bottom - pnlCashBox.Height, rightW, pnlCashBox.Height);
+            bottom = pnlCashBox.Top - S(6);
+            pnlQrBox.SetBounds(right, bottom - pnlQrBox.Height, rightW, pnlQrBox.Height);
+            bottom = pnlQrBox.Top - S(6);
+            lblTotalAmount.Location = new Point(right, bottom - lblTotalAmount.Height);
+            lblTotalLabel.Location = new Point(right, bottom - lblTotalLabel.Height);
+            bottom = lblTotalAmount.Top - S(6);
+
+            int dgvH = Math.Min(S(200), Math.Max(S(120), (bottom - S(8)) / 2));
+            dgvOrderItems.SetBounds(right, S(8), rightW, dgvH);
+            int slotTop = dgvOrderItems.Bottom + S(8);
+            pnlRightQrSlot.SetBounds(right, slotTop, rightW, Math.Max(0, bottom - slotTop));
+
+            txtCashGiven.Width = pnlCashBox.ClientSize.Width - txtCashGiven.Left * 2;
+            picQrCode.Left = pnlQrBox.ClientSize.Width - picQrCode.Width - S(8);
+            lblQrHint.Width = Math.Max(0, picQrCode.Left - lblQrHint.Left - S(6));
+            lblRightQrTitle.Width = pnlRightQrSlot.ClientSize.Width;
+            lblRightQrCaption.Width = pnlRightQrSlot.ClientSize.Width;
+            int qrSize = Math.Max(S(80), Math.Min(S(210), pnlRightQrSlot.ClientSize.Height - lblRightQrTitle.Bottom - lblRightQrCaption.Height - S(16)));
+            picRightQr.SetBounds((pnlRightQrSlot.ClientSize.Width - qrSize) / 2, lblRightQrTitle.Bottom + S(6), qrSize, qrSize);
+            lblRightQrCaption.Top = picRightQr.Bottom + S(6);
+            ResumeLayout(true);
 
             BuildDynamicMovieCatalog();
             BuildDynamicShowtimeCatalog();
-            InitializeSeatMapControl();
-            BuildDynamicComboCatalog();
-            UpdateOrderItems();
-            ApplyPaymentModeUI();
-            UpdateTotalDisplay();
         }
+
+        private static int ThreeColumnWidth(Control panel)
+            => Math.Max(60, (panel.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 4) / 3 - ItemMargin * 2);
 
         private void SetupCustomUI()
         {
@@ -117,8 +185,8 @@ namespace CinemaManagement.Forms.Staff
             dgvOrderItems.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#1e242a");
             dgvOrderItems.DefaultCellStyle.SelectionForeColor = Color.White;
             dgvOrderItems.RowTemplate.Height = 38;
-
-            if (pnlComboCatalog != null) pnlComboCatalog.Location = new Point(230, 500);
+            dgvOrderItems.AllowUserToAddRows = false;
+            dgvOrderItems.ReadOnly = true;
         }
 
         private void BindPaymentMethodEvents()
@@ -142,76 +210,18 @@ namespace CinemaManagement.Forms.Staff
             }
         }
 
-        private Image? LoadIntegratedQrImage()
+        private Image? CreatePaymentQrImage()
         {
-            string[] possibleFiles = { "My qr.jpg", "my_qr.png", "my_qr.jpg", "my_qr.jpeg" };
-            string finalPath = "";
-
-            foreach (var fileName in possibleFiles)
+            if (currentTotal <= 0) return null;
+            try
             {
-                string path1 = Path.Combine(Application.StartupPath, "Image", fileName);
-                string path2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Image", fileName);
-
-                if (File.Exists(path1)) { finalPath = path1; break; }
-                if (File.Exists(path2)) { finalPath = path2; break; }
+                string reference = $"POS{selectedShowtimeId}-{DateTime.Now:HHmmss}";
+                return QrHelper.Generate(QrHelper.BuildMockPaymentPayload(reference, currentTotal), 6);
             }
-
-            if (!string.IsNullOrEmpty(finalPath))
+            catch
             {
-                try
-                {
-                    using var stream = new FileStream(finalPath, FileMode.Open, FileAccess.Read);
-                    using var tempImg = Image.FromStream(stream);
-                    return new Bitmap(tempImg);
-                }
-                catch
-                {
-                }
+                return null;
             }
-
-            string payload = $"CINELUXE|{selectedShowtimeId}|{selectedMovie}|{currentTotal:0}";
-            Bitmap fallbackBmp = new Bitmap(220, 220);
-            using (Graphics g = Graphics.FromImage(fallbackBmp))
-            {
-                g.Clear(Color.White);
-                int grid = 21;
-                int cell = 9;
-                int offset = 15;
-                int seed = Math.Abs(payload.GetHashCode());
-
-                for (int y = 0; y < grid; y++)
-                {
-                    for (int x = 0; x < grid; x++)
-                    {
-                        bool tl = x < 7 && y < 7;
-                        bool tr = x >= grid - 7 && y < 7;
-                        bool bl = x < 7 && y >= grid - 7;
-                        bool isFinder = tl || tr || bl;
-
-                        bool draw;
-                        if (isFinder)
-                        {
-                            int fx = tr ? x - (grid - 7) : x;
-                            int fy = bl ? y - (grid - 7) : y;
-                            bool outer = fx == 0 || fx == 6 || fy == 0 || fy == 6;
-                            bool inner = fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4;
-                            draw = outer || inner;
-                        }
-                        else
-                        {
-                            int bit = (x * 13 + y * 29 + seed) % 31;
-                            draw = ((seed >> bit) ^ (x * 3 + y * 5)) % 2 == 0;
-                        }
-
-                        if (draw)
-                        {
-                            g.FillRectangle(Brushes.Black, offset + x * cell, offset + y * cell, cell, cell);
-                        }
-                    }
-                }
-            }
-
-            return fallbackBmp;
         }
 
         private void ApplyPaymentModeUI()
@@ -251,7 +261,6 @@ namespace CinemaManagement.Forms.Staff
 
             if (isQr && txtCashGiven != null)
             {
-                txtCashGiven.Text = currentTotal.ToString("0");
                 errorProvider.SetError(txtCashGiven, string.Empty);
             }
 
@@ -263,11 +272,9 @@ namespace CinemaManagement.Forms.Staff
             if (!isQr) return;
 
             if (lblRightQrCaption != null)
-            {
-                lblRightQrCaption.Text = $"Số tiền thanh toán: {currentTotal:N0} VNĐ";
-            }
+                lblRightQrCaption.Text = $"Số tiền thanh toán: {currentTotal:N0} VNĐ (QR mô phỏng)";
 
-            var qrImg = LoadIntegratedQrImage();
+            var qrImg = CreatePaymentQrImage();
             if (picQrCode != null)
             {
                 var oldSmall = picQrCode.Image;
@@ -289,238 +296,77 @@ namespace CinemaManagement.Forms.Staff
 
         private void InitializeSeatMapControl()
         {
-            if (seatMapControl == null)
-            {
-                seatMapControl = new SeatMapControl();
-                seatMapControl.Location = new Point(230, 200);
-                seatMapControl.Size = new Size(515, 290);
-                this.Controls.Add(seatMapControl);
-                seatMapControl.BringToFront();
-
-                seatMapControl.OnSeatSelectionChanged += (seats) =>
-                {
-                    selectedSeats = new List<string>(seats);
-                    UpdateOrderItems();
-                };
-            }
-
-            seatMapControl.LoadSeatMap(selectedShowtimeId);
+            seatMapControl = new SeatMapControl();
+            Controls.Add(seatMapControl);
+            seatMapControl.BringToFront();
+            seatMapControl.OnSeatSelectionChanged += _ => UpdateOrderItems();
         }
 
-        private void LoadFullMoviesFromDatabase()
+        private void ReloadCatalog()
         {
-            dbMovies.Clear();
             try
             {
-                string query = "SELECT MovieId, Title, Duration, Genre, AgeRating FROM Movies;";
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
-                {
-                    conn.Open();
-                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
-                    {
-                        using (SQLiteDataReader reader = cmd.ExecuteReader())
-                        {
-                            while (reader.Read())
-                            {
-                                dbMovies.Add(new MovieDetail
-                                {
-                                    MovieId = Convert.ToInt32(reader["MovieId"]),
-                                    Title = reader["Title"].ToString(),
-                                    Duration = reader["Duration"]?.ToString() ?? "120",
-                                    Genre = reader["Genre"]?.ToString() ?? "HD",
-                                    AgeRating = reader["AgeRating"]?.ToString() ?? "T13"
-                                });
-                            }
-                        }
-                    }
-                }
+                dbShowtimes = _showtimeService.GetSellableShowtimes();
+                var movieIds = dbShowtimes.Select(s => s.MovieId).ToHashSet();
+                dbMovies = _movieService.GetAll().Where(m => movieIds.Contains(m.MovieId)).ToList();
+                dbCombos = _comboService.GetActiveCombos();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi kết nối CSDL Phim: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                MessageBox.Show("Không tải được dữ liệu bán vé: " + ex.Message, "Lỗi CSDL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                dbShowtimes = new();
+                dbMovies = new();
+                dbCombos = new();
             }
 
-            if (dbMovies.Count == 0)
-            {
-                dbMovies.Add(new MovieDetail
-                    { MovieId = 1, Title = "Dune: Part Two", Duration = "166", Genre = "Sci-Fi", AgeRating = "T16" });
-                dbMovies.Add(new MovieDetail
-                    { MovieId = 2, Title = "Godzilla x Kong", Duration = "115", Genre = "Action", AgeRating = "T13" });
-            }
+            foreach (var id in selectedCombos.Keys.Where(id => dbCombos.All(c => c.ComboId != id)).ToList())
+                selectedCombos.Remove(id);
 
-            if (dbMovies.Count > 0)
-            {
-                selectedMovie = dbMovies[0].Title;
-            }
+            if (dbMovies.All(m => m.MovieId != selectedMovieId))
+                selectedMovieId = dbMovies.FirstOrDefault()?.MovieId ?? 0;
+
+            SelectMovie(selectedMovieId, keepShowtime: true);
+            BuildDynamicComboCatalog();
         }
 
-        private void LoadShowtimesFromDatabase()
+        private void SelectMovie(int movieId, bool keepShowtime = false)
         {
-            dbShowtimes.Clear();
-            try
-            {
-                string query = @"SELECT s.ShowtimeId, s.MovieId, s.RoomId, s.StartTime, r.RoomName, s.Price 
-                                 FROM Showtimes s 
-                                 LEFT JOIN Rooms r ON s.RoomId = r.RoomId;";
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
-                {
-                    conn.Open();
-                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
-                    {
-                        using (SQLiteDataReader reader = cmd.ExecuteReader())
-                        {
-                            while (reader.Read())
-                            {
-                                dbShowtimes.Add(new ShowtimeDetail
-                                {
-                                    ShowtimeId = Convert.ToInt32(reader["ShowtimeId"]),
-                                    MovieId = Convert.ToInt32(reader["MovieId"]),
-                                    RoomId = Convert.ToInt32(reader["RoomId"]),
-                                    StartTime = reader["StartTime"].ToString(),
-                                    RoomName = reader["RoomName"]?.ToString() ?? $"Phòng {reader["RoomId"]}",
-                                    Price = Convert.ToDecimal(reader["Price"])
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Lỗi kết nối CSDL Suất Chiếu: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
-            }
+            selectedMovieId = movieId;
+            var shows = dbShowtimes.Where(s => s.MovieId == movieId).ToList();
 
-            if (dbShowtimes.Count == 0)
-            {
-                dbShowtimes.Add(new ShowtimeDetail { ShowtimeId = 101, MovieId = 1, RoomId = 1, StartTime = "2026-11-12 19:30:00", RoomName = "IMAX Laser", Price = 160000 });
-                dbShowtimes.Add(new ShowtimeDetail { ShowtimeId = 102, MovieId = 1, RoomId = 2, StartTime = "2026-11-12 21:15:00", RoomName = "Phòng 02", Price = 120000 });
-            }
+            int showtimeId = keepShowtime && shows.Any(s => s.ShowtimeId == selectedShowtimeId)
+                ? selectedShowtimeId
+                : shows.FirstOrDefault()?.ShowtimeId ?? 0;
 
-            UpdateActiveShowtimeForSelectedMovie();
+            BuildDynamicMovieCatalog();
+            SelectShowtime(showtimeId);
         }
 
-        private void UpdateActiveShowtimeForSelectedMovie()
+        private void SelectShowtime(int showtimeId)
         {
-            var currentMovieObj = dbMovies.Find(m => m.Title == selectedMovie);
-            if (currentMovieObj != null)
+            bool changed = showtimeId != selectedShowtimeId;
+            if (changed && selectedShowtimeId > 0)
             {
-                DateTime now = DateTime.Now;
-                var matchShow = dbShowtimes.Find(s => s.MovieId == currentMovieObj.MovieId && 
-                                                      (DateTime.TryParse(s.StartTime, out var dt) ? dt >= now : true));
+                try { new SeatHoldService().ReleaseSession(seatMapControl.SessionId); } catch { }
+            }
 
-                if (matchShow != null)
-                {
-                    selectedShowtimeId = matchShow.ShowtimeId;
-                    selectedShowtime = $"{matchShow.StartTime} P.{matchShow.RoomId:D2} [{matchShow.RoomName}]";
-                    selectedTicketPrice = matchShow.Price;
-                    if (seatMapControl != null)
-                    {
-                        seatMapControl.LoadSeatMap(selectedShowtimeId);
-                    }
-                }
+            selectedShowtimeId = showtimeId;
+            BuildDynamicShowtimeCatalog();
+
+            if (showtimeId > 0)
+            {
+                if (changed || seatMapControl.ShowtimeId != showtimeId)
+                    seatMapControl.LoadSeatMap(showtimeId, SeatHoldService.NewSessionId());
                 else
-                {
-                    selectedShowtime = "Chưa có suất chiếu khả dụng";
-                    selectedTicketPrice = 0;
-                }
+                    seatMapControl.RefreshStates();
+                seatMapControl.Visible = true;
             }
-        }
-
-        private void LoadSeatsFromDatabase()
-        {
-            dbSeats.Clear();
-            try
+            else
             {
-                string query = "SELECT SeatNumber, SeatType, Price FROM Seats;";
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
-                {
-                    conn.Open();
-                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
-                    {
-                        using (SQLiteDataReader reader = cmd.ExecuteReader())
-                        {
-                            while (reader.Read())
-                            {
-                                string seatNum = reader["SeatNumber"]?.ToString() ?? "";
-                                decimal.TryParse(
-                                    reader["Price"]?.ToString(),
-                                    NumberStyles.Any,
-                                    CultureInfo.InvariantCulture,
-                                    out decimal seatPrice);
-
-                                dbSeats[seatNum] = new SeatDetail
-                                {
-                                    SeatNumber = seatNum,
-                                    SeatType = reader["SeatType"]?.ToString() ?? "Standard",
-                                    Price = seatPrice
-                                };
-                            }
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-        }
-
-        private void LoadCombosFromDatabase()
-        {
-            dbCombos.Clear();
-            try
-            {
-                using (SQLiteConnection conn = new SQLiteConnection(connectionString))
-                {
-                    conn.Open();
-                    var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    using (var pragma = new SQLiteCommand("PRAGMA table_info(ComboItems);", conn))
-                    using (var r = pragma.ExecuteReader())
-                    {
-                        while (r.Read())
-                        {
-                            string? cName = r["name"]?.ToString();
-                            if (!string.IsNullOrWhiteSpace(cName)) cols.Add(cName);
-                        }
-                    }
-
-                    string idCol = cols.Contains("ComboId") ? "ComboId" : (cols.Contains("Id") ? "Id" : "rowid");
-                    string nameCol = cols.Contains("ComboName") ? "ComboName" : (cols.Contains("Name") ? "Name" : "''");
-                    string descCol = cols.Contains("ImagePath") ? "ImagePath" : (cols.Contains("Description") ? "Description" : "''");
-
-                    string query = $"SELECT {idCol} AS CId, {nameCol} AS Name, Price, {descCol} AS Description FROM ComboItems;";
-                    using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
-                    {
-                        using (SQLiteDataReader reader = cmd.ExecuteReader())
-                        {
-                            int idx = 1;
-                            while (reader.Read())
-                            {
-                                int cId = reader["CId"] != DBNull.Value ? Convert.ToInt32(reader["CId"]) : idx;
-                                dbCombos.Add(new ComboDetail
-                                {
-                                    ComboId = cId > 0 ? cId : idx,
-                                    Name = reader["Name"]?.ToString() ?? $"Combo {idx}",
-                                    Price = Convert.ToDecimal(reader["Price"]),
-                                    Description = reader["Description"]?.ToString() ?? "Combo F&B"
-                                });
-                                idx++;
-                            }
-                        }
-                    }
-                }
-            }
-            catch
-            {
+                seatMapControl.Visible = false;
             }
 
-            if (dbCombos.Count == 0)
-            {
-                dbCombos.Add(new ComboDetail { ComboId = 1, Name = "Combo Solo", Price = 79000, Description = "1 Bắp + 1 Nước" });
-                dbCombos.Add(new ComboDetail { ComboId = 2, Name = "Combo Couple", Price = 129000, Description = "1 Bắp + 2 Nước" });
-                dbCombos.Add(new ComboDetail { ComboId = 3, Name = "Combo Family", Price = 179000, Description = "2 Bắp + 3 Nước" });
-            }
+            UpdateOrderItems();
         }
 
         private void BuildDynamicMovieCatalog()
@@ -528,59 +374,60 @@ namespace CinemaManagement.Forms.Staff
             if (pnlDynamicMovies == null)
             {
                 pnlDynamicMovies = new FlowLayoutPanel();
-                pnlDynamicMovies.Location = new Point(230, 10);
-                pnlDynamicMovies.Size = new Size(515, 140);
                 pnlDynamicMovies.BackColor = ColorBg;
                 pnlDynamicMovies.FlowDirection = FlowDirection.LeftToRight;
                 pnlDynamicMovies.WrapContents = true;
+                VerticalScrollOnly(pnlDynamicMovies);
                 this.Controls.Add(pnlDynamicMovies);
                 pnlDynamicMovies.BringToFront();
             }
 
-            pnlDynamicMovies.Controls.Clear();
+            pnlDynamicMovies.SuspendLayout();
+            ClearAndDispose(pnlDynamicMovies);
+            int cardW = ThreeColumnWidth(pnlDynamicMovies);
 
             foreach (var movie in dbMovies)
             {
                 Panel pnlCard = new Panel();
-                pnlCard.Size = new Size(165, 62);
-                pnlCard.Margin = new Padding(2);
+                pnlCard.Size = new Size(cardW, MovieCardHeight);
+                pnlCard.Margin = new Padding(ItemMargin);
                 pnlCard.Cursor = Cursors.Hand;
-                pnlCard.BackColor = (movie.Title == selectedMovie) ? ColorCardActive : ColorCardBg;
+                pnlCard.BackColor = (movie.MovieId == selectedMovieId) ? ColorCardActive : ColorCardBg;
 
                 Label lblBadge = new Label();
-                lblBadge.Text = movie.AgeRating;
-                lblBadge.Font = new Font("Segoe UI", 7.5F, FontStyle.Bold);
+                lblBadge.Text = string.IsNullOrWhiteSpace(movie.AgeRating) ? "P" : movie.AgeRating;
+                lblBadge.Font = _badgeFont;
                 lblBadge.BackColor = Color.FromArgb(225, 29, 72);
                 lblBadge.ForeColor = Color.White;
-                lblBadge.Location = new Point(5, 4);
-                lblBadge.Size = new Size(30, 15);
+                lblBadge.Location = new Point(S(6), S(5));
+                lblBadge.Size = new Size(S(34), BadgeHeight);
                 lblBadge.TextAlign = ContentAlignment.MiddleCenter;
                 pnlCard.Controls.Add(lblBadge);
 
                 Label lblTitle = new Label();
                 lblTitle.Text = movie.Title;
-                lblTitle.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+                lblTitle.UseMnemonic = false;
+                lblTitle.AutoEllipsis = true;
+                lblTitle.Font = _movieTitleFont;
                 lblTitle.ForeColor = Color.White;
-                lblTitle.Location = new Point(5, 20);
-                lblTitle.Size = new Size(155, 18);
+                lblTitle.Location = new Point(S(6), MovieTitleTop);
+                lblTitle.Size = new Size(cardW - S(12), TextHeight(_movieTitleFont));
                 pnlCard.Controls.Add(lblTitle);
 
                 Label lblSub = new Label();
                 lblSub.Text = $"{movie.Duration} phút • {movie.Genre}";
-                lblSub.Font = new Font("Segoe UI", 6.5F);
+                lblSub.UseMnemonic = false;
+                lblSub.AutoEllipsis = true;
+                lblSub.Font = _movieSubFont;
                 lblSub.ForeColor = ColorTranslator.FromHtml("#94a3b8");
-                lblSub.Location = new Point(5, 39);
-                lblSub.Size = new Size(155, 15);
+                lblSub.Location = new Point(S(6), MovieSubTop);
+                lblSub.Size = new Size(cardW - S(12), TextHeight(_movieSubFont));
                 pnlCard.Controls.Add(lblSub);
 
                 var targetMovie = movie;
                 EventHandler clickHandler = (s, e) =>
                 {
-                    selectedMovie = targetMovie.Title;
-                    UpdateActiveShowtimeForSelectedMovie();
-                    BuildDynamicMovieCatalog();
-                    BuildDynamicShowtimeCatalog();
-                    UpdateOrderItems();
+                    SelectMovie(targetMovie.MovieId);
                 };
 
                 pnlCard.Click += clickHandler;
@@ -590,67 +437,60 @@ namespace CinemaManagement.Forms.Staff
 
                 pnlDynamicMovies.Controls.Add(pnlCard);
             }
+            pnlDynamicMovies.ResumeLayout(true);
         }
 
         private void BuildDynamicShowtimeCatalog()
         {
             if (pnlDynamicShowtimes == null)
             {
-                pnlDynamicShowtimes = new FlowLayoutPanel();
-                pnlDynamicShowtimes.Location = new Point(230, 155);
-                pnlDynamicShowtimes.Size = new Size(515, 40);
-                pnlDynamicShowtimes.BackColor = ColorBg;
-                pnlDynamicShowtimes.FlowDirection = FlowDirection.LeftToRight;
-                pnlDynamicShowtimes.WrapContents = true;
-                this.Controls.Add(pnlDynamicShowtimes);
+                pnlDynamicShowtimes = new FlowLayoutPanel
+                {
+                    BackColor = ColorBg,
+                    FlowDirection = FlowDirection.LeftToRight,
+                    WrapContents = true
+                };
+                VerticalScrollOnly(pnlDynamicShowtimes);
+                Controls.Add(pnlDynamicShowtimes);
                 pnlDynamicShowtimes.BringToFront();
             }
 
-            pnlDynamicShowtimes.Controls.Clear();
-            var currentMovieObj = dbMovies.Find(m => m.Title == selectedMovie);
-            if (currentMovieObj == null) return;
+            ClearAndDispose(pnlDynamicShowtimes);
 
-            DateTime now = DateTime.Now;
-
-            var movieShows = dbShowtimes.FindAll(s => 
+            var movieShows = dbShowtimes.Where(s => s.MovieId == selectedMovieId).ToList();
+            if (movieShows.Count == 0)
             {
-                if (s.MovieId != currentMovieObj.MovieId) return false;
-                if (DateTime.TryParse(s.StartTime, out DateTime showTimeParsed))
+                pnlDynamicShowtimes.Controls.Add(new Label
                 {
-                    return showTimeParsed >= now;
-                }
-                return true;
-            });
+                    Text = dbMovies.Count == 0 ? "Chưa có suất chiếu nào để bán." : "Phim này không còn suất chiếu.",
+                    ForeColor = ColorTranslator.FromHtml("#94a3b8"),
+                    AutoSize = true,
+                    Margin = new Padding(4, 10, 4, 4)
+                });
+                return;
+            }
 
             foreach (var show in movieShows)
             {
-                Button btnShow = new Button();
-                string showStr = $"{show.StartTime} P.{show.RoomId:D2} [{show.RoomName}]";
-                btnShow.Text = showStr;
-                btnShow.Font = new Font("Segoe UI", 7.5F, FontStyle.Bold);
-                btnShow.Size = new Size(165, 32);
-                btnShow.Margin = new Padding(2);
-                btnShow.FlatStyle = FlatStyle.Flat;
+                bool isSelected = show.ShowtimeId == selectedShowtimeId;
+                var btnShow = new Button
+                {
+                    Text = $"{show.StartTime:dd/MM HH:mm} • {show.RoomName}",
+                    UseMnemonic = false,
+                    AutoEllipsis = true,
+                    Font = _showtimeFont,
+                    Size = new Size(ThreeColumnWidth(pnlDynamicShowtimes), ShowtimeButtonHeight),
+                    Margin = new Padding(ItemMargin),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = isSelected ? ColorCardActive : ColorCardBg,
+                    ForeColor = Color.White
+                };
                 btnShow.FlatAppearance.BorderSize = 1;
-
-                bool isSelected = selectedShowtime.Contains(show.StartTime);
-                btnShow.BackColor = isSelected ? ColorCardActive : ColorCardBg;
-                btnShow.ForeColor = Color.White;
                 btnShow.FlatAppearance.BorderColor = isSelected ? Color.White : ColorTranslator.FromHtml("#1e242a");
 
                 var targetShow = show;
-                btnShow.Click += (s, e) =>
-                {
-                    selectedShowtimeId = targetShow.ShowtimeId;
-                    selectedShowtime = $"{targetShow.StartTime} P.{targetShow.RoomId:D2} [{targetShow.RoomName}]";
-                    selectedTicketPrice = targetShow.Price;
-                    if (seatMapControl != null)
-                    {
-                        seatMapControl.LoadSeatMap(selectedShowtimeId);
-                    }
-                    BuildDynamicShowtimeCatalog();
-                    UpdateOrderItems();
-                };
+                btnShow.Click += (_, _) => SelectShowtime(targetShow.ShowtimeId);
+                _showtimeTip.SetToolTip(btnShow, $"{show.MovieTitle}\n{show.StartTime:HH:mm dd/MM/yyyy} - {show.RoomName}\nCòn {show.AvailableSeats}/{show.TotalSeats} ghế");
 
                 pnlDynamicShowtimes.Controls.Add(btnShow);
             }
@@ -663,59 +503,81 @@ namespace CinemaManagement.Forms.Staff
             pnlComboCatalog.AutoScroll = true;
             pnlComboCatalog.BackColor = ColorSurface;
 
-            FlowLayoutPanel pnlCombosFlow = new FlowLayoutPanel();
-            pnlCombosFlow.Dock = DockStyle.Fill;
-            pnlCombosFlow.FlowDirection = FlowDirection.LeftToRight;
-            pnlCombosFlow.WrapContents = true;
+            var pnlCombosFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                AutoScroll = true
+            };
             pnlComboCatalog.Controls.Add(pnlCombosFlow);
+
+            pnlCombosFlow.Controls.Add(new Label
+            {
+                Text = "Bấm chuột trái để thêm, chuột phải để bớt combo. Có thể bán riêng bắp nước (không cần chọn ghế).",
+                ForeColor = ColorTranslator.FromHtml("#94a3b8"),
+                Font = new Font("Segoe UI", 8F),
+                AutoSize = true,
+                Margin = new Padding(6, 6, 6, 2)
+            });
+            pnlCombosFlow.SetFlowBreak(pnlCombosFlow.Controls[0], true);
 
             foreach (var combo in dbCombos)
             {
-                Panel pnlCBox = new Panel();
-                pnlCBox.Size = new Size(160, 65);
-                pnlCBox.Margin = new Padding(4);
-                pnlCBox.Cursor = Cursors.Hand;
+                int qty = selectedCombos.TryGetValue(combo.ComboId, out var q) ? q : 0;
 
-                bool isSelected = selectedCombos.Contains(combo);
-                pnlCBox.BackColor = isSelected ? ColorCardActive : ColorCardBg;
-
-                Label lblCName = new Label();
-                lblCName.Text = combo.Name;
-                lblCName.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
-                lblCName.ForeColor = Color.White;
-                lblCName.Location = new Point(6, 6);
-                lblCName.Size = new Size(148, 18);
-                pnlCBox.Controls.Add(lblCName);
-
-                Label lblCPrice = new Label();
-                lblCPrice.Text = $"{combo.Price:N0} đ";
-                lblCPrice.Font = new Font("Segoe UI", 7.5F, FontStyle.Bold);
-                lblCPrice.ForeColor = ColorTranslator.FromHtml("#f59e0b");
-                lblCPrice.Location = new Point(6, 26);
-                lblCPrice.Size = new Size(148, 15);
-                pnlCBox.Controls.Add(lblCPrice);
-
-                Label lblCDesc = new Label();
-                lblCDesc.Text = combo.Description;
-                lblCDesc.Font = new Font("Segoe UI", 6.5F);
-                lblCDesc.ForeColor = ColorTranslator.FromHtml("#94a3b8");
-                lblCDesc.Location = new Point(6, 43);
-                lblCDesc.Size = new Size(148, 15);
-                pnlCBox.Controls.Add(lblCDesc);
-
-                var targetCombo = combo;
-                EventHandler comboClick = (s, e) =>
+                var pnlCBox = new Panel
                 {
-                    if (selectedCombos.Contains(targetCombo)) selectedCombos.Remove(targetCombo);
-                    else selectedCombos.Add(targetCombo);
+                    Size = new Size(S(160), S(65)),
+                    Margin = new Padding(4),
+                    Cursor = Cursors.Hand,
+                    BackColor = qty > 0 ? ColorCardActive : ColorCardBg
+                };
+
+                var lblCName = new Label
+                {
+                    Text = qty > 0 ? $"{combo.ComboName}  x{qty}" : combo.ComboName,
+                    UseMnemonic = false,
+                    AutoEllipsis = true,
+                    Font = new Font("Segoe UI", 8F, FontStyle.Bold),
+                    ForeColor = Color.White,
+                    Location = new Point(S(6), S(6)),
+                    Size = new Size(S(148), S(18))
+                };
+                var lblCPrice = new Label
+                {
+                    Text = $"{combo.Price:N0} đ",
+                    Font = new Font("Segoe UI", 7.5F, FontStyle.Bold),
+                    ForeColor = ColorTranslator.FromHtml("#f59e0b"),
+                    Location = new Point(S(6), S(26)),
+                    Size = new Size(S(148), S(15))
+                };
+                var lblCDesc = new Label
+                {
+                    Text = combo.Description ?? string.Empty,
+                    Font = new Font("Segoe UI", 6.5F),
+                    ForeColor = ColorTranslator.FromHtml("#94a3b8"),
+                    Location = new Point(S(6), S(43)),
+                    Size = new Size(S(148), S(15))
+                };
+                pnlCBox.Controls.AddRange(new Control[] { lblCName, lblCPrice, lblCDesc });
+
+                int comboId = combo.ComboId;
+                MouseEventHandler comboClick = (_, e) =>
+                {
+                    int current = selectedCombos.TryGetValue(comboId, out var c) ? c : 0;
+                    int next = e.Button == MouseButtons.Right ? current - 1 : current + 1;
+                    next = Math.Clamp(next, 0, 20);
+                    if (next == 0) selectedCombos.Remove(comboId);
+                    else selectedCombos[comboId] = next;
                     BuildDynamicComboCatalog();
                     UpdateOrderItems();
                 };
 
-                pnlCBox.Click += comboClick;
-                lblCName.Click += comboClick;
-                lblCPrice.Click += comboClick;
-                lblCDesc.Click += comboClick;
+                pnlCBox.MouseClick += comboClick;
+                lblCName.MouseClick += comboClick;
+                lblCPrice.MouseClick += comboClick;
+                lblCDesc.MouseClick += comboClick;
 
                 pnlCombosFlow.Controls.Add(pnlCBox);
             }
@@ -723,26 +585,9 @@ namespace CinemaManagement.Forms.Staff
 
         private (decimal TicketTotal, decimal ComboTotal) CalculateRevenueSplit()
         {
-            decimal ticketsTotal = 0m;
-            decimal combosTotal = 0m;
-
-            foreach (var seat in selectedSeats)
-            {
-                if (dbSeats.TryGetValue(seat, out var seatInfo) && seatInfo.Price > 0)
-                {
-                    ticketsTotal += seatInfo.Price;
-                }
-                else
-                {
-                    ticketsTotal += selectedTicketPrice;
-                }
-            }
-
-            foreach (var combo in selectedCombos)
-            {
-                combosTotal += combo.Price;
-            }
-
+            decimal ticketsTotal = seatMapControl?.SelectedTotal ?? 0m;
+            decimal combosTotal = selectedCombos.Sum(kv =>
+                (dbCombos.FirstOrDefault(c => c.ComboId == kv.Key)?.Price ?? 0m) * kv.Value);
             return (ticketsTotal, combosTotal);
         }
 
@@ -750,355 +595,182 @@ namespace CinemaManagement.Forms.Staff
         {
             dgvOrderItems.Rows.Clear();
             var split = CalculateRevenueSplit();
-            decimal ticketsTotal = split.TicketTotal;
-            decimal combosTotal = split.ComboTotal;
 
-            if (selectedSeats.Count > 0)
+            var seats = seatMapControl?.SelectedSeats ?? new List<SeatStatusDto>();
+            var show = dbShowtimes.FirstOrDefault(s => s.ShowtimeId == selectedShowtimeId);
+
+            if (seats.Count > 0 && show != null)
             {
-                string seatsStr = string.Join(", ", selectedSeats);
-                dgvOrderItems.Rows.Add(new object[]
-                {
-                    $"{selectedMovie}\nGhế: {seatsStr} ({selectedShowtime})", selectedSeats.Count.ToString("D2"),
-                    $"{ticketsTotal:N0} đ"
-                });
+                string seatsStr = string.Join(", ", seats.Select(s => s.SeatNumber));
+                dgvOrderItems.Rows.Add(
+                    $"{show.MovieTitle}\nGhế: {seatsStr} ({show.StartTime:HH:mm dd/MM} - {show.RoomName})",
+                    seats.Count.ToString("D2"),
+                    $"{split.TicketTotal:N0} đ");
             }
 
-            foreach (var combo in selectedCombos)
+            foreach (var kv in selectedCombos)
             {
-                dgvOrderItems.Rows.Add(new object[]
-                    { $"{combo.Name}\n{combo.Description}", "01", $"{combo.Price:N0} đ" });
+                var combo = dbCombos.FirstOrDefault(c => c.ComboId == kv.Key);
+                if (combo == null) continue;
+                dgvOrderItems.Rows.Add($"{combo.ComboName}\n{combo.Description}", kv.Value.ToString("D2"), $"{combo.Price * kv.Value:N0} đ");
             }
 
             dgvOrderItems.ClearSelection();
-            currentTicketRevenue = ticketsTotal;
-            currentComboRevenue = combosTotal;
-            currentTotal = ticketsTotal + combosTotal;
+            currentTicketRevenue = split.TicketTotal;
+            currentComboRevenue = split.ComboTotal;
+            currentTotal = split.TicketTotal + split.ComboTotal;
             UpdateTotalDisplay();
         }
 
         private void SetupEvents()
         {
-            lnkPos.LinkClicked += (s, e) =>
+            StaffNavigator.ApplyRoleVisibility(lnkCombo, lnkUsers, lnkReports, lnkOccupancy);
+
+            lnkPos.LinkClicked += (_, _) =>
             {
-                MessageBox.Show($"Bạn đang ở màn hình Bán vé Quầy POS. (Thu ngân: {loggedInUserName})", "Thông Báo",
+                ReloadCatalog();
+                MessageBox.Show($"Bạn đang ở màn hình Bán vé Quầy POS. (Thu ngân: {AppSession.DisplayName})", "Thông Báo",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
-
-            lnkCombo.LinkClicked += (s, e) =>
-            {
-                FrmAdminCombos adminComboForm = new FrmAdminCombos();
-                adminComboForm.Show();
-                this.Hide();
-            };
-
-            lnkUsers.LinkClicked += (s, e) =>
-            {
-                FrmAdminUsers usersForm = new FrmAdminUsers();
-                usersForm.Show();
-                this.Hide();
-            };
-
-            lnkReports.LinkClicked += (s, e) =>
-            {
-                var reportsForm = new CinemaManagement.Forms.Staff.FrmAdminReports();
-                reportsForm.Show();
-                this.Hide();
-            };
-
+            lnkCombo.LinkClicked += (_, _) => StaffNavigator.Navigate<FrmAdminCombos>(this);
+            lnkUsers.LinkClicked += (_, _) => StaffNavigator.Navigate<FrmAdminUsers>(this);
+            lnkReports.LinkClicked += (_, _) => StaffNavigator.Navigate<FrmAdminReports>(this);
             if (lnkOccupancy != null)
-            {
-                lnkOccupancy.LinkClicked += (s, e) => {
-                    var occupancyForm = new FrmOccupancyReport();
-                    occupancyForm.Show();
-                    this.Hide();
-                };
-            }
+                lnkOccupancy.LinkClicked += (_, _) => StaffNavigator.Navigate<FrmOccupancyReport>(this);
 
-            btnCheckout.Click += (s, e) =>
-            {
-                if (selectedSeats.Count == 0)
-                {
-                    errorProvider.SetError(btnCheckout, "Vui lòng chọn ít nhất một ghế ngồi trước khi thanh toán!");
-                    MessageBox.Show("Chưa chọn ghế ngồi cho đơn hàng.", "Lỗi Thanh Toán", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
+            VisibleChanged += (_, _) => { if (Visible) ReloadCatalog(); };
 
-                bool isQr = rdoQrMethod != null && rdoQrMethod.Checked;
-                if (isQr && txtCashGiven != null && string.IsNullOrWhiteSpace(txtCashGiven.Text))
-                {
-                    txtCashGiven.Text = currentTotal.ToString("0");
-                }
+            btnCheckout.Click += (_, _) => Checkout();
 
-                decimal cashGiven = ParseMoney(txtCashGiven.Text);
-                if (string.IsNullOrWhiteSpace(txtCashGiven.Text) || cashGiven < currentTotal)
-                {
-                    errorProvider.SetError(txtCashGiven, "Tiền khách đưa chưa đủ hoặc không hợp lệ!");
-                    MessageBox.Show("Tiền khách đưa chưa đủ để thanh toán!", "Lỗi Thanh Toán", MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
-                    return;
-                }
-
-                errorProvider.SetError(btnCheckout, string.Empty);
-                errorProvider.SetError(txtCashGiven, string.Empty);
-
-                var split = CalculateRevenueSplit();
-                currentTicketRevenue = split.TicketTotal;
-                currentComboRevenue = split.ComboTotal;
-                currentTotal = currentTicketRevenue + currentComboRevenue;
-
-                string paymentMethod = isQr ? "QR_MOMO" : "CASH";
-                SaveTransactionToDatabase(currentTotal, currentTicketRevenue, currentComboRevenue, cashGiven, paymentMethod);
-                MessageBox.Show("Đã thanh toán và lưu giao dịch thành công vào cơ sở dữ liệu!", "Hoàn Tất",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-                selectedSeats.Clear();
-                selectedCombos.Clear();
-                UpdateOrderItems();
-                if (seatMapControl != null)
-                {
-                    seatMapControl.LoadSeatMap(selectedShowtimeId);
-                }
-                BuildDynamicComboCatalog();
-            };
-
-            btnCancelOrder.Click += (s, e) =>
+            btnCancelOrder.Click += (_, _) =>
             {
                 errorProvider.Clear();
-                selectedSeats.Clear();
                 selectedCombos.Clear();
-                UpdateOrderItems();
-                if (seatMapControl != null)
-                {
-                    seatMapControl.LoadSeatMap(selectedShowtimeId);
-                }
+                seatMapControl.ReleaseAll();
+                txtCashGiven.Clear();
                 BuildDynamicComboCatalog();
+                UpdateOrderItems();
             };
 
-            txtCashGiven.TextChanged += (s, e) => UpdateTotalDisplay();
-        }
-
-        private class ColumnMeta
-        {
-            public string Name { get; set; } = "";
-            public string Type { get; set; } = "";
-            public bool NotNull { get; set; }
-            public bool HasDefault { get; set; }
-            public bool IsPrimaryKey { get; set; }
-        }
-
-        private List<ColumnMeta> GetBookingCombosColumns(SQLiteConnection conn)
-        {
-            using (var createCmd = new SQLiteCommand(@"
-                CREATE TABLE IF NOT EXISTS BookingCombos (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    BookingId INTEGER NOT NULL,
-                    ComboId INTEGER NOT NULL DEFAULT 1,
-                    ComboName TEXT NOT NULL,
-                    Quantity INTEGER NOT NULL DEFAULT 1,
-                    UnitPrice NUMERIC NOT NULL DEFAULT 0,
-                    TotalPrice NUMERIC NOT NULL DEFAULT 0
-                );", conn))
+            txtCashGiven.TextChanged += (_, _) =>
             {
-                createCmd.ExecuteNonQuery();
+                errorProvider.SetError(txtCashGiven, string.Empty);
+                UpdateTotalDisplay();
+            };
+        }
+
+        private async void Checkout()
+        {
+            errorProvider.Clear();
+
+            var seatIds = seatMapControl.SelectedSeatIds;
+            bool hasCombos = selectedCombos.Values.Any(q => q > 0);
+
+            if (seatIds.Count == 0 && !hasCombos)
+            {
+                errorProvider.SetError(btnCheckout, "Đơn hàng trống: chọn ghế hoặc combo bắp nước!");
+                MessageBox.Show("Đơn hàng đang trống. Vui lòng chọn ghế ngồi hoặc ít nhất một combo bắp nước.",
+                    "Lỗi Thanh Toán", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
 
-            var cols = new List<ColumnMeta>();
-            using (var pragmaCmd = new SQLiteCommand("PRAGMA table_info(BookingCombos);", conn))
-            using (var reader = pragmaCmd.ExecuteReader())
+            if (seatIds.Count > 0 && selectedShowtimeId <= 0)
             {
-                while (reader.Read())
+                errorProvider.SetError(btnCheckout, "Chưa chọn suất chiếu!");
+                MessageBox.Show("Vui lòng chọn suất chiếu.", "Lỗi Thanh Toán", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            bool comboOnly = seatIds.Count == 0;
+            if (comboOnly &&
+                MessageBox.Show($"Đơn này không có vé, chỉ bán bắp nước ({currentTotal:N0} đ).\nTiếp tục thanh toán?",
+                    "Bán lẻ bắp nước", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            bool isQr = rdoQrMethod != null && rdoQrMethod.Checked;
+            decimal cashGiven = 0;
+            if (!isQr)
+            {
+                if (!ValidationHelper.TryParseMoney(txtCashGiven.Text, out cashGiven) || cashGiven <= 0)
                 {
-                    cols.Add(new ColumnMeta
-                    {
-                        Name = reader["name"]?.ToString() ?? "",
-                        Type = reader["type"]?.ToString() ?? "",
-                        NotNull = reader["notnull"] != DBNull.Value && Convert.ToInt32(reader["notnull"]) != 0,
-                        HasDefault = reader["dflt_value"] != DBNull.Value,
-                        IsPrimaryKey = reader["pk"] != DBNull.Value && Convert.ToInt32(reader["pk"]) != 0
-                    });
+                    errorProvider.SetError(txtCashGiven, "Vui lòng nhập số tiền khách đưa (số dương)!");
+                    txtCashGiven.Focus();
+                    return;
+                }
+                if (cashGiven < currentTotal)
+                {
+                    errorProvider.SetError(txtCashGiven, $"Khách đưa thiếu {currentTotal - cashGiven:N0} đ!");
+                    MessageBox.Show("Tiền khách đưa chưa đủ để thanh toán!", "Lỗi Thanh Toán", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    txtCashGiven.Focus();
+                    return;
                 }
             }
 
-            return cols;
-        }
-
-        private int ResolveComboId(SQLiteConnection conn, string comboName, int fallbackId)
-        {
-            if (fallbackId > 0) return fallbackId;
+            btnCheckout.Enabled = false;
             try
             {
-                var itemCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                using (var pragma = new SQLiteCommand("PRAGMA table_info(ComboItems);", conn))
-                using (var r = pragma.ExecuteReader())
+                BookingReceipt receipt = await _bookingService.CreateBookingAsync(new BookingRequest
                 {
-                    while (r.Read())
-                    {
-                        string? cName = r["name"]?.ToString();
-                        if (!string.IsNullOrWhiteSpace(cName)) itemCols.Add(cName);
-                    }
+                    ShowtimeId = comboOnly ? 0 : selectedShowtimeId,
+                    SeatIds = seatIds,
+                    SessionId = seatMapControl.SessionId,
+                    Combos = selectedCombos.Select(kv => new ComboOrderLine { ComboId = kv.Key, Quantity = kv.Value }).ToList(),
+                    Channel = SalesChannels.Pos,
+                    PaymentMethod = isQr ? PaymentMethods.QrTransfer : PaymentMethods.Cash,
+                    CashGiven = cashGiven,
+                    UserId = AppSession.CurrentUser?.Id,
+                    ExpectedTotal = currentTotal
+                });
+
+                using (var receiptForm = new FrmReceipt(receipt))
+                {
+                    receiptForm.ShowDialog(this);
                 }
 
-                string idCol = itemCols.Contains("ComboId") ? "ComboId" : (itemCols.Contains("Id") ? "Id" : "");
-                string nameCol = itemCols.Contains("ComboName") ? "ComboName" : (itemCols.Contains("Name") ? "Name" : "");
-                if (!string.IsNullOrEmpty(idCol) && !string.IsNullOrEmpty(nameCol))
-                {
-                    using (var cmd = new SQLiteCommand($"SELECT {idCol} FROM ComboItems WHERE {nameCol} = @Name LIMIT 1;", conn))
-                    {
-                        cmd.Parameters.AddWithValue("@Name", comboName);
-                        object? val = cmd.ExecuteScalar();
-                        if (val != null && val != DBNull.Value)
-                        {
-                            int parsed = Convert.ToInt32(val);
-                            if (parsed > 0) return parsed;
-                        }
-                    }
-                }
+                selectedCombos.Clear();
+                txtCashGiven.Clear();
+                seatMapControl.StartNewSession();
+                ReloadCatalog();
             }
-            catch
+            catch (BusinessException ex)
             {
-            }
-
-            return 1;
-        }
-
-        private void SaveBookingCombosToSqlite(int bookingId, List<ComboDetail> combosSnapshot)
-        {
-            if (bookingId <= 0 || combosSnapshot.Count == 0) return;
-
-            var grouped = new Dictionary<string, (int ComboId, int Quantity, decimal UnitPrice, decimal TotalPrice)>(StringComparer.OrdinalIgnoreCase);
-            foreach (var combo in combosSnapshot)
-            {
-                string key = combo.Name ?? "Combo F&B";
-                if (grouped.TryGetValue(key, out var current))
-                {
-                    int newQty = current.Quantity + 1;
-                    decimal newTotal = current.TotalPrice + combo.Price;
-                    grouped[key] = (current.ComboId, newQty, combo.Price, newTotal);
-                }
-                else
-                {
-                    grouped[key] = (combo.ComboId > 0 ? combo.ComboId : 1, 1, combo.Price, combo.Price);
-                }
-            }
-
-            using (var conn = new SQLiteConnection(connectionString))
-            {
-                conn.Open();
-                var cols = GetBookingCombosColumns(conn);
-
-                foreach (var kvp in grouped)
-                {
-                    int resolvedComboId = ResolveComboId(conn, kvp.Key, kvp.Value.ComboId);
-                    var insertCols = new List<string>();
-                    var insertParams = new List<string>();
-                    var cmd = new SQLiteCommand(conn);
-
-                    foreach (var col in cols)
-                    {
-                        if (col.IsPrimaryKey && col.Type.IndexOf("INT", StringComparison.OrdinalIgnoreCase) >= 0)
-                            continue;
-
-                        string colLower = col.Name.ToLowerInvariant();
-                        object? valueToBind = null;
-
-                        if (colLower == "bookingid")
-                            valueToBind = bookingId;
-                        else if (colLower == "comboid")
-                            valueToBind = resolvedComboId;
-                        else if (colLower == "comboname" || colLower == "name")
-                            valueToBind = kvp.Key;
-                        else if (colLower == "quantity" || colLower == "qty")
-                            valueToBind = kvp.Value.Quantity;
-                        else if (colLower == "unitprice" || colLower == "price")
-                            valueToBind = kvp.Value.UnitPrice;
-                        else if (colLower == "totalprice" || colLower == "amount" || colLower == "subtotal")
-                            valueToBind = kvp.Value.TotalPrice;
-                        else if (col.NotNull && !col.HasDefault)
-                        {
-                            valueToBind = col.Type.IndexOf("INT", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                          col.Type.IndexOf("DEC", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                          col.Type.IndexOf("NUM", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                          col.Type.IndexOf("REAL", StringComparison.OrdinalIgnoreCase) >= 0
-                                ? 0
-                                : "";
-                        }
-
-                        if (valueToBind != null)
-                        {
-                            string paramName = "@" + col.Name;
-                            insertCols.Add(col.Name);
-                            insertParams.Add(paramName);
-                            cmd.Parameters.AddWithValue(paramName, valueToBind);
-                        }
-                    }
-
-                    if (insertCols.Count > 0)
-                    {
-                        cmd.CommandText = $"INSERT INTO BookingCombos ({string.Join(", ", insertCols)}) VALUES ({string.Join(", ", insertParams)});";
-                        cmd.ExecuteNonQuery();
-                    }
-                    cmd.Dispose();
-                }
-            }
-        }
-
-        private void SaveTransactionToDatabase(
-            decimal totalAmount,
-            decimal ticketRevenue,
-            decimal comboRevenue,
-            decimal cashGiven,
-            string paymentMethod)
-        {
-            decimal changeReturned = cashGiven - totalAmount;
-            var combosSnapshot = new List<ComboDetail>(selectedCombos);
-            string comboSummary = combosSnapshot.Count > 0
-                ? " | Combo: " + string.Join(", ", combosSnapshot.ConvertAll(c => c.Name))
-                : "";
-
-            try
-            {
-                int bookingId = 0;
-                using (var db = new CinemaDbContext())
-                {
-                    var booking = new Booking
-                    {
-                        MovieTitle = selectedMovie,
-                        ShowtimeInfo = $"{selectedShowtime}{comboSummary} [Vé: {ticketRevenue:N0}đ | Combo: {comboRevenue:N0}đ]",
-                        TotalAmount = totalAmount,
-                        CreatedAt = DateTime.Now
-                    };
-                    db.Bookings.Add(booking);
-                    db.SaveChanges();
-                    bookingId = booking.Id;
-
-                    var payment = new Payment
-                    {
-                        BookingId = booking.Id,
-                        Amount = totalAmount,
-                        CashGiven = cashGiven,
-                        ChangeReturned = changeReturned < 0 ? 0 : changeReturned,
-                        PaymentMethod = paymentMethod,
-                        Status = "SUCCESS",
-                        PaymentDate = DateTime.Now
-                    };
-                    db.Payments.Add(payment);
-                    db.SaveChanges();
-                }
-
-                SaveBookingCombosToSqlite(bookingId, combosSnapshot);
+                MessageBox.Show(ex.Message, "Không thể thanh toán", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                ReloadCatalog();
+                seatMapControl.RefreshStates();
+                UpdateOrderItems();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi ghi nhận giao dịch vào CSDL: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                MessageBox.Show("Lỗi ghi nhận giao dịch vào CSDL: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                btnCheckout.Enabled = true;
             }
         }
 
         private void UpdateTotalDisplay()
         {
             lblTotalAmount.Text = $"{currentTotal:N0} đ";
-            decimal cashGiven = ParseMoney(txtCashGiven.Text);
-            decimal change = cashGiven - currentTotal;
 
+            bool isQr = rdoQrMethod != null && rdoQrMethod.Checked;
+            if (isQr)
+            {
+                if (lblQrHint != null) lblQrHint.Text = $"Quét mã QR (mô phỏng) • {currentTotal:N0} đ";
+                RefreshQrCodeImages(true);
+                return;
+            }
+
+            if (!ValidationHelper.TryParseMoney(txtCashGiven.Text, out decimal cashGiven))
+            {
+                lblChangeDue.Text = "TIỀN THỐI LẠI: Nhập tiền khách đưa";
+                lblChangeDue.ForeColor = ColorTranslator.FromHtml("#94a3b8");
+                return;
+            }
+
+            decimal change = cashGiven - currentTotal;
             if (change >= 0)
             {
                 lblChangeDue.Text = $"TIỀN THỐI LẠI (CHANGE DUE): {change:N0} đ";
@@ -1106,24 +778,9 @@ namespace CinemaManagement.Forms.Staff
             }
             else
             {
-                lblChangeDue.Text = "TIỀN THỐI LẠI: Không đủ";
+                lblChangeDue.Text = $"TIỀN THỐI LẠI: Thiếu {-change:N0} đ";
                 lblChangeDue.ForeColor = Color.FromArgb(239, 68, 68);
             }
-
-            bool isQr = rdoQrMethod != null && rdoQrMethod.Checked;
-            if (isQr)
-            {
-                if (lblQrHint != null) lblQrHint.Text = $"Quét mã QR phía trên • {currentTotal:N0} đ";
-                RefreshQrCodeImages(true);
-            }
-        }
-
-        private decimal ParseMoney(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return 0;
-            string clean = text.Replace("đ", "").Replace(".", "").Replace(",", "").Trim();
-            decimal.TryParse(clean, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal val);
-            return val;
         }
     }
 }

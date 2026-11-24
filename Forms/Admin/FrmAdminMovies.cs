@@ -1,13 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Windows.Forms;
-using CinemaManagement.Data;
+﻿using System.Text;
+using CinemaManagement.Forms.Shared;
+using CinemaManagement.Helpers;
 using CinemaManagement.Models;
-using Microsoft.EntityFrameworkCore;
+using CinemaManagement.Services;
+using static CinemaManagement.Helpers.UiHelper;
 
 namespace CinemaManagement.Forms.Admin
 {
@@ -47,8 +43,10 @@ namespace CinemaManagement.Forms.Admin
         public FrmAdminMovies()
         {
             InitializeComponent();
+            AppSession.RequireAdmin(this);
             BuildLayout();
             ReloadFromDatabase();
+            WindowLayout.ApplyStandardSize(this);
         }
 
         private void BuildLayout()
@@ -166,35 +164,43 @@ namespace CinemaManagement.Forms.Admin
             };
             pnlSidebar.Controls.Add(btnClose);
 
-            AddSidebarItem("Chọn vai trò", 90, false, Close);
-            AddSidebarItem("Bảng điều khiển", 140, false, () =>
-            {
-                Hide();
-                new FrmAdminDashboard().ShowDialog();
-                Show();
-            });
+            AddSidebarItem("Chọn vai trò", 90, false, () => StaffNavigator.ReturnToRoleSelection(this));
+            AddSidebarItem("Bảng điều khiển", 140, false, () => StaffNavigator.Navigate<FrmAdminDashboard>(this));
             AddSidebarItem("Quản lý danh mục phim", 190, true, null);
-            AddSidebarItem("Chi tiết phim", 240, false, () => ShowComingSoon("Chi tiết phim"));
+            AddSidebarItem("Thêm phim mới", 240, false, () => OpenMovieDetail(0));
             AddSidebarItem("Cấu hình phòng chiếu", 290, false, OpenRoomsForm);
             AddSidebarItem("Lịch chiếu phim", 340, false, OpenShowtimesForm);
 
             Controls.Add(pnlSidebar);
         }
 
-        private void OpenRoomsForm()
-        {
-            Hide();
-            FrmAdminRooms frm = new FrmAdminRooms();
-            frm.ShowDialog();
-            Show();
-        }
+        private void OpenRoomsForm() => StaffNavigator.Navigate<FrmAdminRooms>(this);
 
-        private void OpenShowtimesForm()
+        private void OpenShowtimesForm() => StaffNavigator.Navigate<FrmAdminShowtimes>(this);
+
+        private void OpenMovieDetail(int movieId)
         {
-            Hide();
-            FrmAdminShowtimes frm = new FrmAdminShowtimes();
-            frm.ShowDialog();
-            Show();
+            if (movieId > 0)
+            {
+                try
+                {
+                    if (_movieService.GetById(movieId) == null)
+                    {
+                        MessageBox.Show("Phim này không còn tồn tại.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        ReloadFromDatabase();
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ShowError("Không đọc được thông tin phim", ex);
+                    return;
+                }
+            }
+
+            using var frm = new FrmMovieDetail(movieId);
+            if (frm.ShowDialog(this) == DialogResult.OK)
+                ReloadFromDatabase();
         }
 
         private void AddSidebarItem(string text, int top, bool isActive, Action? onClick)
@@ -355,7 +361,7 @@ namespace CinemaManagement.Forms.Admin
             };
 
             var btnAdd = MakeButton("+ Thêm phim", 130, 36, Accent, BgMain, true, false);
-            btnAdd.Click += (_, _) => AddMovie();
+            btnAdd.Click += (_, _) => OpenMovieDetail(0);
             var btnExport = MakeButton("Xuất danh sách", 140, 36, BgSurface, TxtSoft, true);
             btnExport.Click += (_, _) => ExportCsv();
 
@@ -366,11 +372,11 @@ namespace CinemaManagement.Forms.Admin
             return bar;
         }
 
-        private void ReloadFromDatabase()
+        private async void ReloadFromDatabase()
         {
             try
             {
-                allMovies = ReadAllMovies();
+                allMovies = await _movieService.GetAllAsync();
             }
             catch (Exception ex)
             {
@@ -388,8 +394,9 @@ namespace CinemaManagement.Forms.Admin
             kpiTotalValue.Text = total.ToString();
             kpiTotalSub.Text = "phim trong danh mục";
 
-            kpiGenreValue.Text = allMovies.Select(m => (m.Genre ?? "").Trim())
-                .Where(g => g.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Count().ToString();
+            kpiGenreValue.Text = allMovies
+                .SelectMany(m => (m.Genre ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count().ToString();
             kpiGenreSub.Text = "thể loại khác nhau";
 
             if (total == 0)
@@ -401,12 +408,12 @@ namespace CinemaManagement.Forms.Admin
                 return;
             }
 
-            kpiAvgValue.Text = $"{(int)Math.Round(allMovies.Average(m => (double)Dur(m)))} phút";
+            kpiAvgValue.Text = $"{(int)Math.Round(allMovies.Average(m => (double)m.Duration))} phút";
             kpiAvgSub.Text = "trung bình mỗi phim";
 
-            var longest = allMovies.OrderByDescending(Dur).First();
+            var longest = allMovies.OrderByDescending(m => m.Duration).First();
             kpiLongValue.Text = longest.Title ?? "";
-            kpiLongSub.Text = $"{Dur(longest)} phút";
+            kpiLongSub.Text = $"{longest.Duration} phút";
         }
 
         private void RenderMovies()
@@ -502,7 +509,8 @@ namespace CinemaManagement.Forms.Admin
                     try
                     {
                         using var fs = new FileStream(finalPath, FileMode.Open, FileAccess.Read);
-                        picPoster.Image = Image.FromStream(fs);
+                        using var temp = Image.FromStream(fs);
+                        picPoster.Image = new Bitmap(temp);
                     }
                     catch
                     {
@@ -557,7 +565,9 @@ namespace CinemaManagement.Forms.Admin
                 Size = new Size(302, 26),
                 Location = new Point(14, 206)
             };
-            tip.SetToolTip(lblTitle, title);
+            tip.SetToolTip(lblTitle, title + " (bấm để xem chi tiết)");
+            lblTitle.Cursor = Cursors.Hand;
+            lblTitle.Click += (_, _) => OpenMovieDetail(m.MovieId);
             card.Controls.Add(lblTitle);
 
             card.Controls.Add(new Label
@@ -573,7 +583,7 @@ namespace CinemaManagement.Forms.Admin
 
             var btnEdit = MakeButton("Sửa", 92, 34, BgSurface, TxtSoft);
             btnEdit.Location = new Point(14, 284);
-            btnEdit.Click += (_, _) => EditMovie(id);
+            btnEdit.Click += (_, _) => OpenMovieDetail(id);
 
             var btnSchedule = MakeButton("Xếp lịch", 100, 34, BgSurface, TxtSoft);
             btnSchedule.Location = new Point(112, 284);
@@ -600,59 +610,6 @@ namespace CinemaManagement.Forms.Admin
             return card;
         }
 
-        private void AddMovie()
-        {
-            using var dlg = new MovieEditorDialog(null);
-            if (dlg.ShowDialog(this) == DialogResult.OK)
-            {
-                try
-                {
-                    SaveNewMovie(dlg.Result);
-                    ReloadFromDatabase();
-                }
-                catch (Exception ex)
-                {
-                    ShowError("Không thêm được phim mới", ex);
-                }
-            }
-        }
-
-        private void EditMovie(int id)
-        {
-            Movie? movie;
-            try
-            {
-                movie = FindMovie(id);
-            }
-            catch (Exception ex)
-            {
-                ShowError("Không đọc được thông tin phim", ex);
-                return;
-            }
-
-            if (movie == null)
-            {
-                MessageBox.Show("Phim này không còn tồn tại.", "Thông báo", MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                ReloadFromDatabase();
-                return;
-            }
-
-            using var dlg = new MovieEditorDialog(movie);
-            if (dlg.ShowDialog(this) == DialogResult.OK)
-            {
-                try
-                {
-                    SaveChangedMovie(dlg.Result);
-                    ReloadFromDatabase();
-                }
-                catch (Exception ex)
-                {
-                    ShowError("Không cập nhật được phim", ex);
-                }
-            }
-        }
-
         private void DeleteMovie(int id, string title)
         {
             var confirm = MessageBox.Show($"Xóa phim \"{title}\"?", "Xác nhận xóa", MessageBoxButtons.YesNo,
@@ -661,10 +618,10 @@ namespace CinemaManagement.Forms.Admin
 
             try
             {
-                RemoveMovie(id);
+                _movieService.Delete(id);
                 ReloadFromDatabase();
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessException ex)
             {
                 MessageBox.Show(ex.Message, "Không thể xóa", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
@@ -701,55 +658,10 @@ namespace CinemaManagement.Forms.Admin
             }
         }
 
-        private static string Csv(string? s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
-
-        private static List<Movie> ReadAllMovies()
-        {
-            using var db = new CinemaDbContext();
-            return db.Movies.AsNoTracking().ToList();
-        }
-
-        private static Movie? FindMovie(int id)
-        {
-            using var db = new CinemaDbContext();
-            return db.Movies.AsNoTracking().FirstOrDefault(m => m.MovieId == id);
-        }
-
-        private static void SaveNewMovie(Movie movie)
-        {
-            using var db = new CinemaDbContext();
-            db.Movies.Add(movie);
-            db.SaveChanges();
-        }
-
-        private static void SaveChangedMovie(Movie movie)
-        {
-            using var db = new CinemaDbContext();
-            db.Movies.Update(movie);
-            db.SaveChanges();
-        }
-
-        private static void RemoveMovie(int id)
-        {
-            using var db = new CinemaDbContext();
-
-            if (db.Showtimes.Any(s => s.MovieId == id))
-                throw new InvalidOperationException(
-                    "Phim này đã có suất chiếu nên không thể xóa. Hãy xóa các suất chiếu của phim trước.");
-
-            var movie = db.Movies.Find(id) ?? throw new InvalidOperationException("Không tìm thấy phim cần xóa.");
-            db.Movies.Remove(movie);
-            db.SaveChanges();
-        }
-
-        private static int Dur(Movie m) => Convert.ToInt32(m.Duration);
+        private readonly MovieService _movieService = new();
 
         private static void ShowError(string message, Exception ex)
             => MessageBox.Show($"{message}:\n{ex.Message}", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-
-        private static void ShowComingSoon(string feature)
-            => MessageBox.Show($"Màn hình \"{feature}\" đang được phát triển.", "Thông báo", MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
 
         private static Color AgeColor(string? age) => (age ?? "").Trim().ToUpperInvariant() switch
         {
@@ -782,331 +694,6 @@ namespace CinemaManagement.Forms.Admin
             btn.MouseEnter += (_, _) => btn.BackColor = hover;
             btn.MouseLeave += (_, _) => btn.BackColor = back;
             return btn;
-        }
-
-        private sealed class MovieEditorDialog : Form
-        {
-            private readonly Movie movie;
-            private readonly bool isNew;
-            private readonly ErrorProvider error = new() { BlinkStyle = ErrorBlinkStyle.NeverBlink };
-
-            private TextBox txtTitle = null!;
-            private ComboBox cboGenre = null!;
-            private NumericUpDown numDuration = null!;
-            private ComboBox cboAge = null!;
-            private TextBox txtPosterPath = null!;
-            private TextBox txtDescription = null!;
-            private PictureBox picPreview = null!;
-
-            public Movie Result => movie;
-
-            public MovieEditorDialog(Movie? movieItem)
-            {
-                isNew = movieItem == null;
-                movie = movieItem ?? new Movie();
-                BuildUi();
-                if (!isNew) LoadValues();
-
-                FormClosed += (_, _) =>
-                {
-                    if (picPreview.Image != null)
-                    {
-                        picPreview.Image.Dispose();
-                        picPreview.Image = null;
-                    }
-
-                    error.Dispose();
-                };
-            }
-
-            private void BuildUi()
-            {
-                Text = isNew ? "Thêm phim mới" : "Sửa thông tin phim";
-                FormBorderStyle = FormBorderStyle.FixedDialog;
-                MaximizeBox = false;
-                MinimizeBox = false;
-                StartPosition = FormStartPosition.CenterParent;
-                ClientSize = new Size(680, 460);
-                BackColor = BgMain;
-                Font = new Font("Segoe UI", 10F);
-
-                // Cột trái: Khung xem trước Poster & nút chọn ảnh
-                AddLabel("Poster phim", 24, 16);
-
-                picPreview = new PictureBox
-                {
-                    Location = new Point(24, 38),
-                    Size = new Size(195, 285),
-                    BackColor = BgSurface,
-                    BorderStyle = BorderStyle.FixedSingle,
-                    SizeMode = PictureBoxSizeMode.Zoom
-                };
-                Controls.Add(picPreview);
-
-                var btnBrowsePoster = MakeButton("Chọn ảnh...", 122, 34, Primary, Color.White, true, false);
-                btnBrowsePoster.Location = new Point(24, 333);
-                btnBrowsePoster.Click += (_, _) => BrowsePosterImage();
-                Controls.Add(btnBrowsePoster);
-
-                var btnClearPoster = MakeButton("Xóa", 65, 34, BgSurface, TxtSoft);
-                btnClearPoster.Location = new Point(154, 333);
-                btnClearPoster.Click += (_, _) =>
-                {
-                    txtPosterPath.Text = "";
-                    UpdatePosterPreview("");
-                };
-                Controls.Add(btnClearPoster);
-
-                // Cột phải: Thông tin chi tiết phim
-                int rightX = 240;
-                int rightW = 416;
-                int y = 16;
-
-                AddLabel("Tên phim *", rightX, y);
-                txtTitle = new TextBox
-                {
-                    Location = new Point(rightX, y + 22),
-                    Width = rightW,
-                    MaxLength = 200,
-                    BackColor = BgSurface,
-                    ForeColor = Color.White,
-                    BorderStyle = BorderStyle.FixedSingle
-                };
-                Controls.Add(txtTitle);
-
-                y += 62;
-                AddLabel("Thể loại", rightX, y);
-                cboGenre = new ComboBox
-                {
-                    Location = new Point(rightX, y + 22),
-                    Width = rightW,
-                    DropDownStyle = ComboBoxStyle.DropDown,
-                    FlatStyle = FlatStyle.Flat,
-                    BackColor = BgSurface,
-                    ForeColor = Color.White
-                };
-                cboGenre.Items.AddRange(new object[]
-                {
-                    "Hành động", "Tình cảm", "Hài", "Kinh dị", "Khoa học viễn tưởng",
-                    "Hoạt hình", "Phiêu lưu", "Tâm lý", "Gia đình"
-                });
-                Controls.Add(cboGenre);
-
-                y += 62;
-                AddLabel("Thời lượng (phút) *", rightX, y);
-                numDuration = new NumericUpDown
-                {
-                    Location = new Point(rightX, y + 22),
-                    Width = 195,
-                    Minimum = 30,
-                    Maximum = 400,
-                    Value = 100,
-                    BackColor = BgSurface,
-                    ForeColor = Color.White,
-                    BorderStyle = BorderStyle.FixedSingle
-                };
-                Controls.Add(numDuration);
-
-                AddLabel("Độ tuổi", rightX + 216, y);
-                cboAge = new ComboBox
-                {
-                    Location = new Point(rightX + 216, y + 22),
-                    Width = 200,
-                    DropDownStyle = ComboBoxStyle.DropDownList,
-                    FlatStyle = FlatStyle.Flat,
-                    BackColor = BgSurface,
-                    ForeColor = Color.White
-                };
-                cboAge.Items.AddRange(new object[] { "P", "T13", "T16", "T18" });
-                cboAge.SelectedIndex = 0;
-                Controls.Add(cboAge);
-
-                y += 62;
-                AddLabel("Đường dẫn poster (PosterPath)", rightX, y);
-                txtPosterPath = new TextBox
-                {
-                    Location = new Point(rightX, y + 22),
-                    Width = rightW,
-                    MaxLength = 255,
-                    BackColor = BgSurface,
-                    ForeColor = TxtDim,
-                    BorderStyle = BorderStyle.FixedSingle
-                };
-                txtPosterPath.Leave += (_, _) => UpdatePosterPreview(txtPosterPath.Text.Trim());
-                Controls.Add(txtPosterPath);
-
-                y += 62;
-                AddLabel("Mô tả phim", rightX, y);
-                txtDescription = new TextBox
-                {
-                    Location = new Point(rightX, y + 22),
-                    Width = rightW,
-                    Height = 82,
-                    Multiline = true,
-                    ScrollBars = ScrollBars.Vertical,
-                    BackColor = BgSurface,
-                    ForeColor = Color.White,
-                    BorderStyle = BorderStyle.FixedSingle
-                };
-                Controls.Add(txtDescription);
-
-                // Hàng nút Lưu / Hủy dưới cùng
-                var btnSave = MakeButton("Lưu phim", 115, 36, Accent, BgMain, true, false);
-                btnSave.Location = new Point(427, 404);
-                btnSave.Click += (_, _) => Save();
-                Controls.Add(btnSave);
-
-                var btnCancel = MakeButton("Hủy", 100, 36, BgSurface, TxtSoft);
-                btnCancel.Location = new Point(556, 404);
-                btnCancel.DialogResult = DialogResult.Cancel;
-                Controls.Add(btnCancel);
-
-                AcceptButton = btnSave;
-                CancelButton = btnCancel;
-            }
-
-            private void AddLabel(string text, int x, int y)
-            {
-                Controls.Add(new Label
-                {
-                    Text = text,
-                    Location = new Point(x, y),
-                    AutoSize = true,
-                    ForeColor = TxtDim,
-                    Font = new Font("Segoe UI", 9F, FontStyle.Bold)
-                });
-            }
-
-            private void BrowsePosterImage()
-            {
-                using var ofd = new OpenFileDialog
-                {
-                    Title = "Chọn ảnh Poster phim",
-                    Filter = "Ảnh Poster (*.jpg;*.jpeg;*.png;*.webp;*.bmp)|*.jpg;*.jpeg;*.png;*.webp;*.bmp"
-                };
-
-                if (ofd.ShowDialog(this) != DialogResult.OK) return;
-
-                try
-                {
-                    string ext = Path.GetExtension(ofd.FileName);
-                    string safeName = $"poster_{DateTime.Now:yyyyMMddHHmmss}_{Guid.NewGuid().ToString("N")[..6]}{ext}";
-
-                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                    string projectDir = Directory.GetParent(baseDir)?.Parent?.Parent?.Parent?.FullName ?? baseDir;
-
-                    string binImageDir = Path.Combine(baseDir, "Image");
-                    Directory.CreateDirectory(binImageDir);
-                    string binDest = Path.Combine(binImageDir, safeName);
-                    File.Copy(ofd.FileName, binDest, true);
-
-                    // Đồng bộ sang thư mục Image của source project nếu tồn tại
-                    if (Directory.Exists(projectDir) && !projectDir.Equals(baseDir, StringComparison.OrdinalIgnoreCase))
-                    {
-                        string projImageDir = Path.Combine(projectDir, "Image");
-                        Directory.CreateDirectory(projImageDir);
-                        File.Copy(ofd.FileName, Path.Combine(projImageDir, safeName), true);
-                    }
-
-                    string relativePath = $"Image/{safeName}";
-                    txtPosterPath.Text = relativePath;
-                    UpdatePosterPreview(relativePath);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Không thể tải ảnh poster:\n{ex.Message}", "Lỗi ảnh", MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
-                }
-            }
-
-            private void UpdatePosterPreview(string path)
-            {
-                if (picPreview.Image != null)
-                {
-                    picPreview.Image.Dispose();
-                    picPreview.Image = null;
-                }
-
-                if (string.IsNullOrWhiteSpace(path)) return;
-
-                string resolvedPath = ResolvePosterFile(path);
-                if (!string.IsNullOrEmpty(resolvedPath) && File.Exists(resolvedPath))
-                {
-                    try
-                    {
-                        using var fs = new FileStream(resolvedPath, FileMode.Open, FileAccess.Read);
-                        picPreview.Image = Image.FromStream(fs);
-                    }
-                    catch
-                    {
-                    }
-                }
-            }
-
-            private static string ResolvePosterFile(string posterPath)
-            {
-                if (File.Exists(posterPath)) return posterPath;
-
-                string rawPath = posterPath.TrimStart('/', '\\');
-                string fileNameWithoutExt = Path.GetFileNameWithoutExtension(rawPath);
-
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string projectDir = Directory.GetParent(baseDir)?.Parent?.Parent?.Parent?.FullName ?? baseDir;
-                string[] searchFolders =
-                {
-                    Path.Combine(baseDir, "Image"),
-                    Path.Combine(projectDir, "Image"),
-                    Path.Combine(baseDir, Path.GetDirectoryName(rawPath) ?? ""),
-                    Path.Combine(projectDir, Path.GetDirectoryName(rawPath) ?? "")
-                };
-
-                foreach (var folder in searchFolders)
-                {
-                    if (!Directory.Exists(folder)) continue;
-
-                    var matchedFile = Directory.GetFiles(folder)
-                        .FirstOrDefault(f => Path.GetFileNameWithoutExtension(f)
-                            .Equals(fileNameWithoutExt, StringComparison.OrdinalIgnoreCase));
-
-                    if (matchedFile != null) return matchedFile;
-                }
-
-                return "";
-            }
-
-            private void LoadValues()
-            {
-                txtTitle.Text = movie.Title;
-                cboGenre.Text = movie.Genre ?? "";
-                numDuration.Value = Math.Clamp(Convert.ToInt32(movie.Duration), 30, 400);
-
-                int idx = cboAge.Items.IndexOf((movie.AgeRating ?? "P").Trim().ToUpperInvariant());
-                cboAge.SelectedIndex = idx >= 0 ? idx : 0;
-                txtPosterPath.Text = movie.PosterPath ?? "";
-                txtDescription.Text = movie.Description ?? "";
-
-                UpdatePosterPreview(txtPosterPath.Text);
-            }
-
-            private void Save()
-            {
-                error.Clear();
-                if (string.IsNullOrWhiteSpace(txtTitle.Text))
-                {
-                    error.SetError(txtTitle, "Vui lòng nhập tên phim");
-                    txtTitle.Focus();
-                    return;
-                }
-
-                movie.Title = txtTitle.Text.Trim();
-                movie.Genre = cboGenre.Text.Trim();
-                movie.Duration = (int)numDuration.Value;
-                movie.AgeRating = cboAge.Text;
-                movie.PosterPath = txtPosterPath.Text.Trim();
-                movie.Description = txtDescription.Text.Trim();
-
-                DialogResult = DialogResult.OK;
-            }
         }
     }
 }

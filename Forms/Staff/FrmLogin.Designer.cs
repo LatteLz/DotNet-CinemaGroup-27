@@ -1,4 +1,4 @@
-﻿namespace CinemaManagement.Forms.Admin
+﻿namespace CinemaManagement.Forms.Staff
 {
     partial class FrmLogin
     {
