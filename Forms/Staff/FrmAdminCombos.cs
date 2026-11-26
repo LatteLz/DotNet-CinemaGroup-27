@@ -54,6 +54,10 @@ namespace CinemaManagement.Forms.Staff
             dgvCombos.ColumnHeadersDefaultCellStyle.ForeColor = ColorTextMuted;
             dgvCombos.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
             dgvCombos.RowTemplate.Height = 52;
+            dgvCombos.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvCombos.MultiSelect = false;
+            dgvCombos.ReadOnly = true;
+            dgvCombos.AllowUserToAddRows = false;
 
             dgvCombos.CellPainting += DgvCombos_CellPainting;
 
@@ -110,16 +114,21 @@ namespace CinemaManagement.Forms.Staff
             if (btnExportExcel != null) btnExportExcel.Click += BtnExportExcel_Click;
         }
 
-        private bool ShowAddComboDialog(out string comboName, out decimal price, out string description, ComboItem? initial = null)
+        private bool ShowAddComboDialog(out string comboName, out decimal price, out string description,
+            out string? newImageFile, out bool removeImage, ComboItem? initial = null)
         {
             comboName = "";
             price = 0m;
             description = "";
+            newImageFile = null;
+            removeImage = false;
+            string? pickedFile = null;
+            bool cleared = false;
 
             using (Form dlg = new Form())
             {
                 dlg.Text = initial == null ? "Thêm Combo Bắp Nước Mới" : $"Sửa Combo #{initial.ComboId}";
-                dlg.Size = new Size(420, 260);
+                dlg.Size = new Size(420, 330);
                 dlg.StartPosition = FormStartPosition.CenterParent;
                 dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
                 dlg.MaximizeBox = false;
@@ -185,7 +194,7 @@ namespace CinemaManagement.Forms.Staff
                 {
                     Text = "Lưu vào CSDL",
                     DialogResult = DialogResult.OK,
-                    Location = new Point(195, 190),
+                    Location = new Point(195, 250),
                     Size = new Size(105, 30),
                     BackColor = ColorPrimaryBlue,
                     ForeColor = ColorTextWhite,
@@ -197,7 +206,7 @@ namespace CinemaManagement.Forms.Staff
                 {
                     Text = "Hủy",
                     DialogResult = DialogResult.Cancel,
-                    Location = new Point(308, 190),
+                    Location = new Point(308, 250),
                     Size = new Size(77, 30),
                     BackColor = ColorBorder,
                     ForeColor = ColorTextWhite,
@@ -205,7 +214,70 @@ namespace CinemaManagement.Forms.Staff
                 };
                 btnCancel.FlatAppearance.BorderSize = 0;
 
-                dlg.Controls.AddRange(new Control[] { lblName, txtName, lblPrice, txtPrice, lblDesc, txtDesc, btnOk, btnCancel });
+                Label lblImage = new Label
+                {
+                    Text = "Ảnh combo (không bắt buộc):",
+                    Location = new Point(20, 186),
+                    Size = new Size(360, 20),
+                    Font = FontInterBold,
+                    ForeColor = ColorTextMuted
+                };
+                Label lblImageFile = new Label
+                {
+                    Location = new Point(214, 214),
+                    Size = new Size(172, 20),
+                    AutoEllipsis = true,
+                    ForeColor = ColorTextWhite,
+                    Text = string.IsNullOrWhiteSpace(initial?.ImagePath) ? "(chưa có ảnh)" : System.IO.Path.GetFileName(initial!.ImagePath)
+                };
+                Button btnPickImage = new Button
+                {
+                    Text = "Chọn ảnh...",
+                    Location = new Point(20, 208),
+                    Size = new Size(110, 30),
+                    BackColor = ColorBorder,
+                    ForeColor = ColorTextWhite,
+                    FlatStyle = FlatStyle.Flat
+                };
+                btnPickImage.FlatAppearance.BorderSize = 0;
+                Button btnClearImage = new Button
+                {
+                    Text = "Bỏ ảnh",
+                    Location = new Point(136, 208),
+                    Size = new Size(70, 30),
+                    BackColor = ColorBorder,
+                    ForeColor = ColorTextWhite,
+                    FlatStyle = FlatStyle.Flat
+                };
+                btnClearImage.FlatAppearance.BorderSize = 0;
+
+                btnPickImage.Click += (_, _) =>
+                {
+                    using var ofd = new OpenFileDialog
+                    {
+                        Title = "Chọn ảnh combo",
+                        Filter = "Ảnh (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp"
+                    };
+                    if (ofd.ShowDialog(dlg) != DialogResult.OK) return;
+                    using var test = ImageHelper.Load(ofd.FileName);
+                    if (test == null)
+                    {
+                        MessageBox.Show("File được chọn không phải ảnh hợp lệ.", "Ảnh không hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                    pickedFile = ofd.FileName;
+                    cleared = false;
+                    lblImageFile.Text = System.IO.Path.GetFileName(ofd.FileName);
+                };
+                btnClearImage.Click += (_, _) =>
+                {
+                    pickedFile = null;
+                    cleared = true;
+                    lblImageFile.Text = "(chưa có ảnh)";
+                };
+
+                dlg.Controls.AddRange(new Control[] { lblName, txtName, lblPrice, txtPrice, lblDesc, txtDesc,
+                    lblImage, btnPickImage, btnClearImage, lblImageFile, btnOk, btnCancel });
                 dlg.AcceptButton = btnOk;
                 dlg.CancelButton = btnCancel;
 
@@ -238,6 +310,8 @@ namespace CinemaManagement.Forms.Staff
                     comboName = inputName;
                     price = parsedPrice;
                     description = inputDesc;
+                    newImageFile = pickedFile;
+                    removeImage = cleared;
                     return true;
                 }
             }
@@ -245,13 +319,17 @@ namespace CinemaManagement.Forms.Staff
 
         private void BtnAddComboTop_Click(object sender, EventArgs e)
         {
-            if (!ShowAddComboDialog(out string name, out decimal price, out string description))
+            if (!ShowAddComboDialog(out string name, out decimal price, out string description, out string? newImage, out _))
                 return;
 
             errorProvider.SetError(btnAddComboTop, string.Empty);
+            string? imagePath = null;
+            bool saved = false;
             try
             {
-                _comboService.AddCombo(new ComboItem { ComboName = name, Price = price, Description = description });
+                if (newImage != null) imagePath = ImageHelper.SaveImageCopy(newImage, "combo");
+                _comboService.AddCombo(new ComboItem { ComboName = name, Price = price, Description = description, ImagePath = imagePath });
+                saved = true;
                 LoadDataFromDb();
                 MessageBox.Show("Đã thêm combo bắp nước thành công!", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -263,11 +341,16 @@ namespace CinemaManagement.Forms.Staff
             {
                 MessageBox.Show("Lỗi khi thêm vào CSDL: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+            finally
+            {
+                if (!saved) ImageHelper.DeleteUploadedPoster(imagePath);
+            }
         }
 
         private ComboItem? GetSelectedCombo()
         {
-            if (dgvCombos.SelectedRows.Count == 0 || dgvCombos.SelectedRows[0].Tag is not int comboId)
+            var row = dgvCombos.SelectedRows.Count > 0 ? dgvCombos.SelectedRows[0] : dgvCombos.CurrentRow;
+            if (row == null || row.Tag is not int comboId)
             {
                 errorProvider.SetError(btnEditCombo, "Chưa chọn dòng dữ liệu!");
                 MessageBox.Show("Vui lòng chọn một combo trên bảng.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -282,20 +365,26 @@ namespace CinemaManagement.Forms.Staff
             var combo = GetSelectedCombo();
             if (combo == null) return;
 
-            if (!ShowAddComboDialog(out string name, out decimal price, out string description, combo))
+            if (!ShowAddComboDialog(out string name, out decimal price, out string description, out string? newImage, out bool removeImage, combo))
                 return;
 
+            string? copiedImage = null;
+            bool saved = false;
             try
             {
+                if (newImage != null) copiedImage = ImageHelper.SaveImageCopy(newImage, "combo");
+                string? imagePath = copiedImage ?? (removeImage ? null : combo.ImagePath);
                 _comboService.UpdateCombo(new ComboItem
                 {
                     ComboId = combo.ComboId,
                     ComboName = name,
                     Price = price,
                     Description = description,
-                    ImagePath = combo.ImagePath,
-                    IsActive = true
+                    ImagePath = imagePath,
+                    IsActive = combo.IsActive
                 });
+                saved = true;
+                if (imagePath != combo.ImagePath) ImageHelper.DeleteUploadedPoster(combo.ImagePath);
                 LoadDataFromDb();
                 MessageBox.Show("Đã cập nhật combo.", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -306,6 +395,10 @@ namespace CinemaManagement.Forms.Staff
             catch (Exception ex)
             {
                 MessageBox.Show("Lỗi khi cập nhật CSDL: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                if (!saved) ImageHelper.DeleteUploadedPoster(copiedImage);
             }
         }
 

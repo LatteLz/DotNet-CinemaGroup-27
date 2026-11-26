@@ -109,7 +109,7 @@ namespace CinemaManagement.Forms.Kiosk
             {
                 try
                 {
-                    movies = _movieService.GetAll();
+                    movies = _movieService.GetMoviesForKiosk(_currentFilter);
                 }
                 catch (Exception ex)
                 {
@@ -122,7 +122,7 @@ namespace CinemaManagement.Forms.Kiosk
             {
                 Label lblEmpty = new Label
                 {
-                    Text = "Hiện chưa có dữ liệu phim.",
+                    Text = "Hiện chưa có phim nào đang mở bán vé.",
                     Font = new Font("Segoe UI", 12F),
                     ForeColor = ColorTranslator.FromHtml("#8b9198"),
                     AutoSize = true,

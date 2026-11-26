@@ -28,5 +28,9 @@ namespace CinemaManagement.Models
         public virtual Seat Seat { get; set; } = null!;
 
         public decimal Price { get; set; }
+
+        [Required]
+        [StringLength(20)]
+        public string AudienceType { get; set; } = AudienceTypes.Adult;
     }
 }

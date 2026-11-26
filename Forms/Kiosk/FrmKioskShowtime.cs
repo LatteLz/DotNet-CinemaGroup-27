@@ -267,15 +267,18 @@ namespace CinemaManagement.Forms.Kiosk
                 Control? lastButton = null;
                 foreach (var st in roomGroup)
                 {
-                    bool isPast = st.StartTime <= DateTime.Now;
+                    bool isPast = !ShowtimeService.IsSellable(st.StartTime);
+                    bool started = !isPast && st.StartTime <= DateTime.Now;
                     bool isSoldOut = st.AvailableSeats == 0;
                     bool isDisabled = isPast || isSoldOut;
 
                     string statusText = isPast
-                        ? $"{st.StartTime:HH:mm}\n(Đã chiếu)"
+                        ? $"{st.StartTime:HH:mm}\n(Hết giờ bán)"
                         : isSoldOut
                             ? $"{st.StartTime:HH:mm}\n(Hết ghế)"
-                            : $"{st.StartTime:HH:mm}\nCòn {st.AvailableSeats}/{st.TotalSeats} ghế";
+                            : started
+                                ? $"{st.StartTime:HH:mm}\n(Đã bắt đầu)\nCòn {st.AvailableSeats}/{st.TotalSeats} ghế"
+                                : $"{st.StartTime:HH:mm}\nCòn {st.AvailableSeats}/{st.TotalSeats} ghế";
 
                     Button btnTime = new Button
                     {

@@ -10,6 +10,15 @@ namespace CinemaManagement.Forms.Kiosk
         public decimal UnitPrice { get; set; }
     }
 
+    public class KioskTicketLine
+    {
+        public int SeatId { get; set; }
+        public string SeatNumber { get; set; } = string.Empty;
+        public string SeatType { get; set; } = string.Empty;
+        public string AudienceType { get; set; } = Models.AudienceTypes.Adult;
+        public decimal Price { get; set; }
+    }
+
     public class KioskOrder
     {
         public int ShowtimeId { get; init; }
@@ -19,6 +28,7 @@ namespace CinemaManagement.Forms.Kiosk
 
         public List<int> SeatIds { get; set; } = new();
         public List<string> SeatNumbers { get; set; } = new();
+        public List<KioskTicketLine> Tickets { get; set; } = new();
         public decimal TicketTotal { get; set; }
         public List<KioskComboSelection> Combos { get; set; } = new();
 

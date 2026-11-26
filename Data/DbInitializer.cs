@@ -19,6 +19,7 @@ namespace CinemaManagement.Data
             using var context = DbFactory.Create();
             DeleteIfCreatedWithoutMigrations(context);
             context.Database.Migrate();
+            NormalizeLegacyRoomTypes(context);
 
             SeedUsers(context);
             SeedCombos(context);
@@ -32,6 +33,25 @@ namespace CinemaManagement.Data
             var creator = context.Database.GetService<IRelationalDatabaseCreator>();
             if (creator.Exists() && creator.HasTables() && !context.Database.GetAppliedMigrations().Any())
                 context.Database.EnsureDeleted();
+        }
+
+        private static void NormalizeLegacyRoomTypes(CinemaDbContext context)
+        {
+            var legacy = context.Rooms.AsEnumerable().Where(r => !RoomTypes.All.Contains(r.RoomType)).ToList();
+            if (legacy.Count == 0) return;
+
+            foreach (var room in legacy)
+            {
+                string type = room.RoomType ?? string.Empty;
+                room.RoomType = type.Contains("4DX", StringComparison.OrdinalIgnoreCase) || type.Contains("ScreenX", StringComparison.OrdinalIgnoreCase)
+                    ? RoomTypes.ScreenX
+                    : type.Contains("IMAX", StringComparison.OrdinalIgnoreCase)
+                        ? RoomTypes.Imax
+                        : type.Contains("VIP", StringComparison.OrdinalIgnoreCase)
+                            ? RoomTypes.Vip
+                            : RoomTypes.Standard;
+            }
+            context.SaveChanges();
         }
 
         private static void SeedUsers(CinemaDbContext context)
@@ -72,9 +92,10 @@ namespace CinemaManagement.Data
             if (context.ComboItems.Any()) return;
 
             context.ComboItems.AddRange(
-                new ComboItem { ComboName = "Combo Solo", Description = "1 Bắp ngọt (L) + 1 Nước ngọt (L)", Price = 79000m, ImagePath = "Image/solocb.png" },
-                new ComboItem { ComboName = "Combo Couple", Description = "1 Bắp ngọt (XL) + 2 Nước ngọt (L)", Price = 119000m, ImagePath = "Image/cpcb.png" },
-                new ComboItem { ComboName = "Combo Family", Description = "2 Bắp (XL) + 4 Nước ngọt (L)", Price = 199000m, ImagePath = "Image/fmcb.png" });
+                new ComboItem { ComboName = "My Combo", Description = "1 Bắp ngọt (L) + 1 Nước siêu lớn", Price = 95000m, ImagePath = "Image/solocb.png" },
+                new ComboItem { ComboName = "Premium My Combo", Description = "1 Bắp ngọt (L) + 1 Nước siêu lớn + 1 Snack", Price = 115000m, ImagePath = "Image/solocb.png" },
+                new ComboItem { ComboName = "CGV Combo", Description = "1 Bắp ngọt (L) + 2 Nước siêu lớn", Price = 125000m, ImagePath = "Image/cpcb.png" },
+                new ComboItem { ComboName = "Premium CGV Combo", Description = "1 Bắp ngọt (L) + 2 Nước siêu lớn + 1 Snack", Price = 135000m, ImagePath = "Image/fmcb.png" });
             context.SaveChanges();
         }
 
@@ -133,7 +154,7 @@ namespace CinemaManagement.Data
                 for (int r = 0; r < rooms.Count; r++)
                 {
                     DateTime start = date.AddHours(9).AddMinutes(r * 30);
-                    decimal basePrice = RoomTypes.SuggestedPrice(rooms[r].RoomType);
+                    decimal basePrice = RoomTypes.BasePrice(rooms[r].RoomType, date);
 
                     while (true)
                     {
@@ -147,7 +168,7 @@ namespace CinemaManagement.Data
                             RoomId = rooms[r].RoomId,
                             StartTime = start,
                             EndTime = end,
-                            Price = start.Hour >= 17 ? basePrice + 10000m : basePrice
+                            Price = basePrice
                         });
 
                         movieCursor++;

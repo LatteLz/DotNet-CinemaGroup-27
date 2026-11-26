@@ -26,6 +26,7 @@ namespace CinemaManagement.Forms.Admin
         private Label _lblEditing = null!;
         private CheckBox _chkShowPast = null!;
         private int _editingShowtimeId;
+        private bool _suppressSelection = true;
         private readonly ErrorProvider _errors = new() { BlinkStyle = ErrorBlinkStyle.NeverBlink };
 
         private readonly ShowtimeService _showtimeService;
@@ -71,7 +72,7 @@ namespace CinemaManagement.Forms.Admin
             _dtpStartTime = new DateTimePicker { Location = new Point(600, 38), Width = 100, Format = DateTimePickerFormat.Custom, CustomFormat = "HH:mm", ShowUpDown = true, BackColor = BgSurface, ForeColor = Color.White };
 
             Label lblPrice = new Label { Text = "Giá vé (VNĐ):", Location = new Point(720, 15), AutoSize = true, ForeColor = TextDim };
-            _numPrice = new NumericUpDown { Location = new Point(720, 38), Width = 130, Minimum = 30000, Maximum = 500000, Value = 90000, Increment = 5000, BackColor = BgSurface, ForeColor = Color.White };
+            _numPrice = new NumericUpDown { Location = new Point(720, 38), Width = 130, Minimum = 30000, Maximum = 500000, Value = 90000, Increment = 1000, BackColor = BgSurface, ForeColor = Color.White };
 
             _btnAddShowtime = new Button
             {
@@ -160,6 +161,13 @@ namespace CinemaManagement.Forms.Admin
             _dgvShowtimes.RowTemplate.Height = 36;
 
             _dgvShowtimes.SelectionChanged += OnGridSelectionChanged;
+            _dgvShowtimes.DataBindingComplete += (_, _) => { if (_suppressSelection) _dgvShowtimes.ClearSelection(); };
+            Shown += (_, _) =>
+            {
+                _dgvShowtimes.ClearSelection();
+                ExitEditMode();
+                _suppressSelection = false;
+            };
             Controls.Add(_dgvShowtimes);
             Controls.Add(pnlInput);
         }
@@ -176,6 +184,7 @@ namespace CinemaManagement.Forms.Admin
                 _cboRooms.DisplayMember = "RoomName";
                 _cboRooms.ValueMember = "RoomId";
                 _cboRooms.SelectedIndexChanged += OnRoomChanged;
+                _dtpStartDate.ValueChanged += OnRoomChanged;
                 OnRoomChanged(null, EventArgs.Empty);
             }
             catch (Exception ex)
@@ -187,7 +196,7 @@ namespace CinemaManagement.Forms.Admin
         private void OnRoomChanged(object? sender, EventArgs e)
         {
             if (_editingShowtimeId > 0 || _cboRooms.SelectedItem is not Room room) return;
-            _numPrice.Value = Math.Clamp(RoomTypes.SuggestedPrice(room.RoomType), _numPrice.Minimum, _numPrice.Maximum);
+            _numPrice.Value = Math.Clamp(RoomTypes.BasePrice(room.RoomType, _dtpStartDate.Value.Date), _numPrice.Minimum, _numPrice.Maximum);
         }
 
         private sealed class ShowtimeRow
@@ -204,6 +213,8 @@ namespace CinemaManagement.Forms.Admin
 
         private void LoadShowtimes()
         {
+            bool wasSuppressed = _suppressSelection;
+            _suppressSelection = true;
             try
             {
                 var list = _showtimeService.GetAllForAdmin(_chkShowPast.Checked)
@@ -242,10 +253,15 @@ namespace CinemaManagement.Forms.Admin
             {
                 MessageBox.Show("Lỗi nạp danh sách suất chiếu: " + ex.Message, "Lỗi DB", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+            finally
+            {
+                _suppressSelection = wasSuppressed;
+            }
         }
 
         private void OnGridSelectionChanged(object? sender, EventArgs e)
         {
+            if (_suppressSelection) return;
             if (_dgvShowtimes.SelectedRows.Count == 0 || _dgvShowtimes.SelectedRows[0].DataBoundItem is not ShowtimeRow row)
             {
                 ExitEditMode();
@@ -283,6 +299,7 @@ namespace CinemaManagement.Forms.Admin
             _btnUpdateShowtime.Enabled = false;
             _btnUpdateShowtime.BackColor = ColorTranslator.FromHtml("#334155");
             _lblEditing.Text = "Chọn 1 dòng trong bảng để sửa suất chiếu (suất đã bán vé chỉ được đổi giá).";
+            if (_cboRooms != null) OnRoomChanged(null, EventArgs.Empty);
         }
 
         private void OnUpdateShowtimeClick(object? sender, EventArgs e)

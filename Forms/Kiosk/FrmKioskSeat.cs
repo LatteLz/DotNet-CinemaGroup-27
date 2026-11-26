@@ -1,4 +1,6 @@
 using CinemaManagement.Controls;
+using CinemaManagement.Forms.Shared;
+using CinemaManagement.Models;
 using CinemaManagement.Services;
 using CinemaManagement.Helpers;
 
@@ -16,6 +18,8 @@ public partial class FrmKioskSeat : Form
     private System.Windows.Forms.Timer _clockTimer = null!;
     private System.Windows.Forms.Timer _countdownTimer = null!;
     private bool _expiredHandled;
+    private readonly Dictionary<int, string> _lastAudiences = new();
+    private FrmAudiencePicker? _activePicker;
 
     public string SessionId => _sessionId;
 
@@ -35,7 +39,7 @@ public partial class FrmKioskSeat : Form
     {
         AddLegendItem(pnlLegend, SeatMapControl.ColorAvailable, "Ghế thường (trống)", 45);
         AddLegendItem(pnlLegend, SeatMapControl.ColorVip, "Ghế VIP (trống)", 71);
-        AddLegendItem(pnlLegend, SeatMapControl.ColorCouple, "Ghế Đôi (trống)", 97);
+        AddLegendItem(pnlLegend, SeatMapControl.ColorCouple, "Ghế Sweetbox (trống)", 97);
         AddLegendItem(pnlLegend, SeatMapControl.ColorSelected, "Ghế bạn đang chọn", 123);
         AddLegendItem(pnlLegend, SeatMapControl.ColorSold, "Đã bán / đang có người giữ", 149);
     }
@@ -93,6 +97,32 @@ public partial class FrmKioskSeat : Form
                 return;
             }
 
+            var showtime = _showtimeService.GetById(_showtimeId);
+            if (showtime == null) return;
+
+            using var picker = new FrmAudiencePicker(seats, showtime.Price, showtime.RoomType, showtime.StartTime, _lastAudiences) { TopMost = true };
+            _activePicker = picker;
+            DialogResult pickResult;
+            try { pickResult = picker.ShowDialog(this); }
+            finally { _activePicker = null; }
+            if (pickResult != DialogResult.OK || _expiredHandled) return;
+            if (_seatHoldService.GetSessionExpiry(_sessionId) == null)
+            {
+                HandleExpired();
+                return;
+            }
+
+            foreach (var kv in picker.Selections) _lastAudiences[kv.Key] = kv.Value;
+            var tickets = seats.Select(s => new KioskTicketLine
+            {
+                SeatId = s.SeatId,
+                SeatNumber = s.SeatNumber,
+                SeatType = s.SeatType,
+                AudienceType = picker.Selections.GetValueOrDefault(s.SeatId, AudienceTypes.Adult),
+                Price = TicketPricing.TicketPrice(showtime.Price, showtime.RoomType, showtime.StartTime, s.SeatType,
+                    picker.Selections.GetValueOrDefault(s.SeatId, AudienceTypes.Adult))
+            }).ToList();
+
             var order = new KioskOrder
             {
                 ShowtimeId = _showtimeId,
@@ -100,7 +130,8 @@ public partial class FrmKioskSeat : Form
                 SessionId = _sessionId,
                 SeatIds = seats.Select(s => s.SeatId).ToList(),
                 SeatNumbers = seats.Select(s => s.SeatNumber).ToList(),
-                TicketTotal = seats.Sum(s => s.Price)
+                Tickets = tickets,
+                TicketTotal = tickets.Sum(t => t.Price)
             };
 
             var frmCombo = new FrmKioskCombo(order) { TopMost = true };
@@ -144,7 +175,7 @@ public partial class FrmKioskSeat : Form
             lblMovieTitle.Text = showtime.MovieTitle.ToUpper();
             lblShowtimeInfo.Text =
                 $"Suất: {showtime.StartTime:HH:mm - dd/MM/yyyy}\nPhòng chiếu: {showtime.RoomName}\n" +
-                $"Ghế thường: {showtime.Price:N0} đ • VIP +{Models.SeatTypes.VipSurcharge:N0} đ • Đôi x2";
+                $"Người lớn, ghế thường: {showtime.Price:N0} đ ({Models.DayTypes.ToDisplay(Models.DayTypes.Of(showtime.StartTime))}) • VIP +{Models.SeatTypes.VipSurcharge:N0} đ • Sweetbox (2 người): 2 × ({showtime.Price:N0} + {Models.SeatTypes.CoupleSurchargePerPerson:N0}) đ";
         }
         catch (Exception ex)
         {
@@ -171,14 +202,14 @@ public partial class FrmKioskSeat : Form
         if (seats.Count > 0)
         {
             lblSelectedSeats.Text = $"GHẾ ĐÃ CHỌN ({seats.Count}): {string.Join(", ", seats.Select(s => s.SeatNumber))}";
-            lblTotalPrice.Text = $"TỔNG TIỀN: {seats.Sum(s => s.Price):N0} đ";
+            lblTotalPrice.Text = $"TẠM TÍNH: {seats.Sum(s => s.Price):N0} đ";
             btnContinuePayment.Enabled = true;
             btnContinuePayment.BackColor = ColorTranslator.FromHtml("#ffb961");
         }
         else
         {
             lblSelectedSeats.Text = "GHẾ ĐÃ CHỌN: (Chưa chọn ghế)";
-            lblTotalPrice.Text = "TỔNG TIỀN: 0 đ";
+            lblTotalPrice.Text = "TẠM TÍNH: 0 đ";
             btnContinuePayment.Enabled = false;
             btnContinuePayment.BackColor = ColorTranslator.FromHtml("#282C31");
         }
@@ -232,6 +263,13 @@ public partial class FrmKioskSeat : Form
         if (_expiredHandled) return;
         _expiredHandled = true;
         _countdownTimer?.Stop();
+
+        if (_activePicker != null && !_activePicker.IsDisposed && _activePicker.Visible)
+        {
+            _activePicker.DialogResult = DialogResult.Cancel;
+            BeginInvoke(new Action(() => KioskFlow.HandleHoldExpired(_sessionId, this)));
+            return;
+        }
         KioskFlow.HandleHoldExpired(_sessionId, this);
     }
 

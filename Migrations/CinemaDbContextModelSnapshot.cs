@@ -350,6 +350,11 @@ namespace CinemaManagement.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("AudienceType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("BookingId")
                         .HasColumnType("INTEGER");
 

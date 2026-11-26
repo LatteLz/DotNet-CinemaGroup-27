@@ -14,6 +14,7 @@ namespace CinemaManagement.Services
     {
         public int ShowtimeId { get; set; }
         public List<int> SeatIds { get; set; } = new();
+        public Dictionary<int, string> SeatAudiences { get; set; } = new();
         public List<ComboOrderLine> Combos { get; set; } = new();
 
         public string SessionId { get; set; } = string.Empty;
@@ -32,6 +33,7 @@ namespace CinemaManagement.Services
     {
         public string SeatNumber { get; set; } = string.Empty;
         public string SeatType { get; set; } = string.Empty;
+        public string AudienceType { get; set; } = AudienceTypes.Adult;
         public string TicketCode { get; set; } = string.Empty;
         public decimal Price { get; set; }
     }
@@ -65,6 +67,7 @@ namespace CinemaManagement.Services
         public DateTime CreatedAt { get; set; }
 
         public string SeatList => string.Join(", ", Tickets.Select(t => t.SeatNumber));
+        public string TicketSummary => string.Join(", ", Tickets.Select(t => $"{t.SeatNumber} ({AudienceTypes.ShortDisplay(t.AudienceType)})"));
         public string QrPayload => Helpers.QrHelper.BuildTicketPayload(BookingCode, string.Join(",", Tickets.Select(t => t.TicketCode)));
     }
 
@@ -78,6 +81,7 @@ namespace CinemaManagement.Services
         {
             request.SeatIds ??= new List<int>();
             request.Combos ??= new List<ComboOrderLine>();
+            request.SeatAudiences ??= new Dictionary<int, string>();
             if (request.SeatIds.Count == 0)
                 return await CreateComboOnlyOrderAsync(request);
 
@@ -128,7 +132,12 @@ namespace CinemaManagement.Services
                 throw new BusinessException("Có combo không còn kinh doanh. Vui lòng chọn lại combo.");
 
             var orderedSeats = seats.OrderBy(s => s.RowIndex).ThenBy(s => s.ColIndex).ToList();
-            decimal ticketAmount = orderedSeats.Sum(s => SeatTypes.GetTicketPrice(showtime.Price, s.SeatType));
+            bool premiumRoom = TicketPricing.IsPremiumFormat(showtime.Room.RoomType);
+            string AudienceOf(int seatId) => premiumRoom
+                ? AudienceTypes.Adult
+                : AudienceTypes.Normalize(request.SeatAudiences.GetValueOrDefault(seatId));
+            decimal PriceOf(Seat seat) => TicketPricing.TicketPrice(showtime.Price, showtime.Room.RoomType, showtime.StartTime, seat.SeatType, AudienceOf(seat.SeatId));
+            decimal ticketAmount = orderedSeats.Sum(PriceOf);
             decimal comboAmount = comboLines.Sum(l => comboItems.First(c => c.ComboId == l.ComboId).Price * l.Quantity);
             decimal total = ticketAmount + comboAmount;
 
@@ -160,7 +169,8 @@ namespace CinemaManagement.Services
                 {
                     ShowtimeId = showtime.ShowtimeId,
                     SeatId = seat.SeatId,
-                    Price = SeatTypes.GetTicketPrice(showtime.Price, seat.SeatType),
+                    Price = PriceOf(seat),
+                    AudienceType = AudienceOf(seat.SeatId),
                     TicketCode = $"{bookingCode}-{seat.SeatNumber}"
                 });
             }
@@ -204,7 +214,8 @@ namespace CinemaManagement.Services
                 {
                     SeatNumber = s.SeatNumber,
                     SeatType = s.SeatType,
-                    Price = SeatTypes.GetTicketPrice(showtime.Price, s.SeatType),
+                    AudienceType = AudienceOf(s.SeatId),
+                    Price = PriceOf(s),
                     TicketCode = $"{bookingCode}-{s.SeatNumber}"
                 }).ToList(),
                 Combos = comboLines.Select(l =>
@@ -317,7 +328,7 @@ namespace CinemaManagement.Services
                 StartTime = b.Showtime?.StartTime,
                 Channel = b.Channel,
                 Tickets = b.Tickets.OrderBy(t => t.Seat.RowIndex).ThenBy(t => t.Seat.ColIndex)
-                    .Select(t => new ReceiptTicketLine { SeatNumber = t.Seat.SeatNumber, SeatType = t.Seat.SeatType, TicketCode = t.TicketCode, Price = t.Price })
+                    .Select(t => new ReceiptTicketLine { SeatNumber = t.Seat.SeatNumber, SeatType = t.Seat.SeatType, AudienceType = t.AudienceType, TicketCode = t.TicketCode, Price = t.Price })
                     .ToList(),
                 Combos = b.BookingCombos
                     .Select(c => new ReceiptComboLine { ComboName = c.ComboItem.ComboName, Quantity = c.Quantity, UnitPrice = c.UnitPrice })

@@ -30,6 +30,7 @@ namespace CinemaManagement.Forms.Staff
         private List<ComboItem> dbCombos = new();
 
         private readonly Dictionary<int, int> selectedCombos = new();
+        private readonly Dictionary<int, string> selectedAudiences = new();
 
         private FlowLayoutPanel pnlDynamicMovies = null!;
         private FlowLayoutPanel pnlDynamicShowtimes = null!;
@@ -45,6 +46,8 @@ namespace CinemaManagement.Forms.Staff
             SetupCustomUI();
             BindPaymentMethodEvents();
             SetupEvents();
+            AcceptButton = btnCheckout;
+            CancelButton = btnCancelOrder;
             InitializeSeatMapControl();
             ReloadCatalog();
             ApplyPaymentModeUI();
@@ -345,6 +348,7 @@ namespace CinemaManagement.Forms.Staff
         private void SelectShowtime(int showtimeId)
         {
             bool changed = showtimeId != selectedShowtimeId;
+            if (changed) selectedAudiences.Clear();
             if (changed && selectedShowtimeId > 0)
             {
                 try { new SeatHoldService().ReleaseSession(seatMapControl.SessionId); } catch { }
@@ -585,7 +589,11 @@ namespace CinemaManagement.Forms.Staff
 
         private (decimal TicketTotal, decimal ComboTotal) CalculateRevenueSplit()
         {
-            decimal ticketsTotal = seatMapControl?.SelectedTotal ?? 0m;
+            var show = dbShowtimes.FirstOrDefault(s => s.ShowtimeId == selectedShowtimeId);
+            decimal ticketsTotal = show == null || seatMapControl == null
+                ? 0m
+                : seatMapControl.SelectedSeats.Sum(seat => TicketPricing.TicketPrice(show.Price, show.RoomType, show.StartTime,
+                    seat.SeatType, selectedAudiences.GetValueOrDefault(seat.SeatId, AudienceTypes.Adult)));
             decimal combosTotal = selectedCombos.Sum(kv =>
                 (dbCombos.FirstOrDefault(c => c.ComboId == kv.Key)?.Price ?? 0m) * kv.Value);
             return (ticketsTotal, combosTotal);
@@ -599,13 +607,29 @@ namespace CinemaManagement.Forms.Staff
             var seats = seatMapControl?.SelectedSeats ?? new List<SeatStatusDto>();
             var show = dbShowtimes.FirstOrDefault(s => s.ShowtimeId == selectedShowtimeId);
 
+            foreach (var id in selectedAudiences.Keys.Where(id => seats.All(s => s.SeatId != id)).ToList())
+                selectedAudiences.Remove(id);
+
             if (seats.Count > 0 && show != null)
             {
-                string seatsStr = string.Join(", ", seats.Select(s => s.SeatNumber));
-                dgvOrderItems.Rows.Add(
-                    $"{show.MovieTitle}\nGhế: {seatsStr} ({show.StartTime:HH:mm dd/MM} - {show.RoomName})",
+                int headerRow = dgvOrderItems.Rows.Add(
+                    $"{show.MovieTitle}\n{show.StartTime:HH:mm dd/MM} - {show.RoomName} ({DayTypes.ToDisplay(DayTypes.Of(show.StartTime))})",
                     seats.Count.ToString("D2"),
                     $"{split.TicketTotal:N0} đ");
+                dgvOrderItems.Rows[headerRow].Tag = "tickets";
+
+                bool premium = TicketPricing.IsPremiumFormat(show.RoomType);
+                foreach (var seat in seats)
+                {
+                    string audience = premium ? AudienceTypes.Adult : selectedAudiences.GetValueOrDefault(seat.SeatId, AudienceTypes.Adult);
+                    decimal price = TicketPricing.TicketPrice(show.Price, show.RoomType, show.StartTime, seat.SeatType, audience);
+                    int row = dgvOrderItems.Rows.Add(
+                        $"   • Ghế {seat.SeatNumber} ({SeatTypes.ToDisplay(seat.SeatType)}) - {AudienceTypes.ToDisplay(audience)}{(premium ? "" : "  ▾")}",
+                        "01",
+                        $"{price:N0} đ");
+                    dgvOrderItems.Rows[row].Tag = seat.SeatId;
+                    dgvOrderItems.Rows[row].Height = S(30);
+                }
             }
 
             foreach (var kv in selectedCombos)
@@ -642,10 +666,19 @@ namespace CinemaManagement.Forms.Staff
 
             btnCheckout.Click += (_, _) => Checkout();
 
+            dgvOrderItems.CellClick += (_, e) =>
+            {
+                if (e.RowIndex < 0) return;
+                object? tag = dgvOrderItems.Rows[e.RowIndex].Tag;
+                if (tag is int seatId) ShowAudienceMenu(seatId);
+                else if (tag as string == "tickets") OpenAudiencePicker();
+            };
+
             btnCancelOrder.Click += (_, _) =>
             {
                 errorProvider.Clear();
                 selectedCombos.Clear();
+                selectedAudiences.Clear();
                 seatMapControl.ReleaseAll();
                 txtCashGiven.Clear();
                 BuildDynamicComboCatalog();
@@ -657,6 +690,55 @@ namespace CinemaManagement.Forms.Staff
                 errorProvider.SetError(txtCashGiven, string.Empty);
                 UpdateTotalDisplay();
             };
+        }
+
+        private void ShowAudienceMenu(int seatId)
+        {
+            var show = dbShowtimes.FirstOrDefault(s => s.ShowtimeId == selectedShowtimeId);
+            var seat = seatMapControl.SelectedSeats.FirstOrDefault(s => s.SeatId == seatId);
+            if (show == null || seat == null) return;
+
+            var menu = new ContextMenuStrip();
+            if (TicketPricing.IsPremiumFormat(show.RoomType))
+            {
+                menu.Items.Add(new ToolStripMenuItem($"Phòng {show.RoomType}: mọi đối tượng cùng giá") { Enabled = false });
+            }
+            else
+            {
+                string current = selectedAudiences.GetValueOrDefault(seatId, AudienceTypes.Adult);
+                foreach (var audience in AudienceTypes.All)
+                {
+                    decimal price = TicketPricing.TicketPrice(show.Price, show.RoomType, show.StartTime, seat.SeatType, audience);
+                    var item = new ToolStripMenuItem($"{AudienceTypes.ToDisplay(audience)}  -  {price:N0} đ") { Checked = audience == current };
+                    item.ToolTipText = AudienceTypes.Requirement(audience);
+                    string chosen = audience;
+                    item.Click += (_, _) =>
+                    {
+                        selectedAudiences[seatId] = chosen;
+                        UpdateOrderItems();
+                    };
+                    menu.Items.Add(item);
+                }
+                menu.Items.Add(new ToolStripSeparator());
+                var all = new ToolStripMenuItem("Chọn cho tất cả vé...");
+                all.Click += (_, _) => OpenAudiencePicker();
+                menu.Items.Add(all);
+            }
+            menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+            menu.Show(Cursor.Position);
+        }
+
+        private void OpenAudiencePicker()
+        {
+            var show = dbShowtimes.FirstOrDefault(s => s.ShowtimeId == selectedShowtimeId);
+            var seats = seatMapControl.SelectedSeats;
+            if (show == null || seats.Count == 0) return;
+
+            using var picker = new FrmAudiencePicker(seats, show.Price, show.RoomType, show.StartTime, selectedAudiences);
+            if (picker.ShowDialog(this) != DialogResult.OK) return;
+
+            foreach (var kv in picker.Selections) selectedAudiences[kv.Key] = kv.Value;
+            UpdateOrderItems();
         }
 
         private async void Checkout()
@@ -715,6 +797,7 @@ namespace CinemaManagement.Forms.Staff
                 {
                     ShowtimeId = comboOnly ? 0 : selectedShowtimeId,
                     SeatIds = seatIds,
+                    SeatAudiences = seatIds.ToDictionary(id => id, id => selectedAudiences.GetValueOrDefault(id, AudienceTypes.Adult)),
                     SessionId = seatMapControl.SessionId,
                     Combos = selectedCombos.Select(kv => new ComboOrderLine { ComboId = kv.Key, Quantity = kv.Value }).ToList(),
                     Channel = SalesChannels.Pos,
@@ -730,6 +813,7 @@ namespace CinemaManagement.Forms.Staff
                 }
 
                 selectedCombos.Clear();
+                selectedAudiences.Clear();
                 txtCashGiven.Clear();
                 seatMapControl.StartNewSession();
                 ReloadCatalog();

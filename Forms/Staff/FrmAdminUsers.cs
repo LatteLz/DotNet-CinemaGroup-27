@@ -37,6 +37,11 @@ namespace CinemaManagement.Forms.Staff
                 dgvUsers.DefaultCellStyle.SelectionForeColor = Color.White;
                 dgvUsers.RowTemplate.Height = 45;
                 dgvUsers.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                dgvUsers.ReadOnly = true;
+                dgvUsers.AllowUserToAddRows = false;
+                dgvUsers.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+                dgvUsers.MultiSelect = false;
+                dgvUsers.CellPainting += DgvUsers_CellPainting;
 
                 dgvUsers.CellClick += DgvUsers_CellClick;
                 dgvUsers.CellMouseMove += DgvUsers_CellMouseMove;
@@ -77,6 +82,22 @@ namespace CinemaManagement.Forms.Staff
                     }
                 };
             }
+        }
+
+        private static readonly string[] ActionIcons = { "👁", "✏", "🗑" };
+
+        private void DgvUsers_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != dgvUsers.Columns["colAction"].Index || e.Graphics == null) return;
+            e.PaintBackground(e.CellBounds, true);
+            int third = e.CellBounds.Width / 3;
+            for (int i = 0; i < ActionIcons.Length; i++)
+            {
+                var area = new Rectangle(e.CellBounds.X + i * third, e.CellBounds.Y, third, e.CellBounds.Height);
+                TextRenderer.DrawText(e.Graphics, ActionIcons[i], e.CellStyle?.Font ?? dgvUsers.Font, area, Color.White,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            }
+            e.Handled = true;
         }
 
         private void DgvUsers_CellMouseMove(object sender, DataGridViewCellMouseEventArgs e)
@@ -188,8 +209,9 @@ namespace CinemaManagement.Forms.Staff
                     u.Role,
                     u.IsActive ? "Hoạt động" : "Đã khóa",
                     u.CreateAt.ToString("dd/MM/yyyy"),
-                    "👁    ✏    🗑");
+                    "");
                 dgvUsers.Rows[row].Tag = u.Id;
+                dgvUsers.Rows[row].Cells["colAction"].ToolTipText = "Xem  |  Sửa  |  Xóa";
             }
         }
 

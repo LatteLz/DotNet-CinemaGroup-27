@@ -22,11 +22,12 @@ namespace CinemaManagement.Services
         public int ShowtimeCount { get; set; }
         public int TicketsSold { get; set; }
         public int TotalSeats { get; set; }
+        public int SeatsFilled { get; set; }
         public decimal TicketRevenue { get; set; }
         public decimal ComboRevenue { get; set; }
         public decimal TotalRevenue => TicketRevenue + ComboRevenue;
         public int SuccessfulTransactionsCount { get; set; }
-        public double AverageOccupancy => TotalSeats > 0 ? (double)TicketsSold / TotalSeats * 100 : 0;
+        public double AverageOccupancy => TotalSeats > 0 ? (double)SeatsFilled / TotalSeats * 100 : 0;
     }
 
     public class ShowtimeOccupancyReportDto
@@ -83,7 +84,8 @@ namespace CinemaManagement.Services
                     MovieId = b.ShowtimeId == null ? 0 : b.Showtime!.MovieId,
                     Title = b.ShowtimeId == null ? BookingService.ComboOnlyTitle : b.Showtime!.Movie.Title,
                     b.TicketAmount,
-                    b.ComboAmount
+                    b.ComboAmount,
+                    Tickets = b.Tickets.Count()
                 })
                 .ToList();
 
@@ -94,7 +96,7 @@ namespace CinemaManagement.Services
                     s.MovieId,
                     s.Movie.Title,
                     Seats = s.Room.Seats.Count(),
-                    Sold = s.Tickets.Count()
+                    Sold = s.Tickets.Count(t => t.Booking.Payments.Any(p => p.Status == PaymentStatus.Success))
                 })
                 .ToList();
 
@@ -110,7 +112,8 @@ namespace CinemaManagement.Services
                         MovieName = rev.FirstOrDefault()?.Title ?? shows.FirstOrDefault()?.Title ?? $"Phim #{id}",
                         ShowtimeCount = shows.Count,
                         TotalSeats = shows.Sum(s => s.Seats),
-                        TicketsSold = shows.Sum(s => s.Sold),
+                        SeatsFilled = shows.Sum(s => s.Sold),
+                        TicketsSold = rev.Sum(r => r.Tickets),
                         TicketRevenue = rev.Sum(r => r.TicketAmount),
                         ComboRevenue = rev.Sum(r => r.ComboAmount),
                         SuccessfulTransactionsCount = rev.Count

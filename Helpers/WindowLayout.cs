@@ -2,7 +2,7 @@ namespace CinemaManagement.Helpers
 {
     public static class WindowLayout
     {
-        public static readonly Size StandardClientSize = new(1440, 900);
+        public static readonly Size StandardClientSize = new(1920, 1080);
 
         public static readonly Size KioskDesignSize = new(1920, 1080);
 
@@ -31,15 +31,20 @@ namespace CinemaManagement.Helpers
         public static void ScaleToScreen(Form kioskForm)
         {
             Rectangle bounds = Screen.PrimaryScreen?.Bounds ?? new Rectangle(Point.Empty, KioskDesignSize);
-            ScaleContent(kioskForm, bounds.Size);
+            ScaleContent(kioskForm, bounds.Size, KioskDesignSize);
             kioskForm.StartPosition = FormStartPosition.Manual;
             kioskForm.Location = bounds.Location;
         }
 
-        private static void ScaleContent(Form form, Size target)
+        private static void ScaleContent(Form form, Size target, Size? designSize = null)
         {
-            Size design = form.ClientSize;
-            if (design.Width <= 0 || design.Height <= 0 || design == target) return;
+            Size design = designSize ?? form.ClientSize;
+            if (design.Width <= 0 || design.Height <= 0) return;
+            if (design == target)
+            {
+                form.ClientSize = target;
+                return;
+            }
 
             float sx = target.Width / (float)design.Width;
             float sy = target.Height / (float)design.Height;

@@ -25,7 +25,7 @@ namespace CinemaManagement.Forms.Admin
 
         private void SetupCustomUI()
         {
-            this.Text = "CineLuxe Cinema Management System - .NET 10.0 CLR [x64]";
+            this.Text = "CineLuxe Cinema Management System";
             this.Size = new Size(1280, 800);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(16, 20, 24); 
@@ -92,7 +92,7 @@ namespace CinemaManagement.Forms.Admin
                 });
             this.Controls.Add(cardAdmin);
 
-            cardKiosk = CreateCard("Ki-ốt Khách hàng Tự phục vụ", "CUSTOMER SELF-SERVICE", 
+            cardKiosk = CreateCard("Ki-ốt Khách hàng", "CUSTOMER SELF-SERVICE", 
                 "Dành cho khách hàng tra cứu phim, chọn suất chiếu, đặt ghế và tự thanh toán in vé tự động nhanh chóng.", 
                 "Khởi chạy Chế độ Ki-ốt →", Color.FromArgb(217, 119, 6), 610, (sender, e) => {
                     FrmKioskHome kioskHome = new FrmKioskHome();

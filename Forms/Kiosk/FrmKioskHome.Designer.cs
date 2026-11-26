@@ -11,7 +11,6 @@ partial class FrmKioskHome
     private Label lblClock;
     private Label lblStep1;
     private Label lblStep2;
-    private Button btnHelp;
     private Button btnExit;
     protected override void Dispose(bool disposing)
     {
@@ -75,19 +74,6 @@ partial class FrmKioskHome
                 AutoSize = true
             };
 
-            btnHelp = new Button
-            {
-                Text = "Trợ giúp",
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                ForeColor = ColorTranslator.FromHtml("#ffb961"),
-                BackColor = ColorTranslator.FromHtml("#6f4400"),
-                FlatStyle = FlatStyle.Flat,
-                Size = new Size(100, 36),
-                Location = new Point(1670, 22),
-                Cursor = Cursors.Hand
-            };
-            btnHelp.FlatAppearance.BorderSize = 0;
-
             btnExit = new Button
             {
                 Text = "✕ THOÁT",
@@ -105,7 +91,6 @@ partial class FrmKioskHome
             pnlHeader.Controls.Add(lblStep1);
             pnlHeader.Controls.Add(lblStep2);
             pnlHeader.Controls.Add(lblClock);
-            pnlHeader.Controls.Add(btnHelp);
             pnlHeader.Controls.Add(btnExit);
 
             pnlFilterBar = new Panel

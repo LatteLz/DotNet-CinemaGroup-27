@@ -33,7 +33,7 @@ public partial class FrmKioskSuccess : Form
             lblTicketDetails.Text =
                 $"Phim: {_receipt.MovieTitle.ToUpper()}\n" +
                 $"Suất chiếu: {_receipt.RoomName} | {_receipt.StartTime:HH:mm dd/MM/yyyy}\n" +
-                $"Ghế: {_receipt.SeatList}{combos}\n" +
+                $"Vé: {_receipt.TicketSummary}{combos}\n" +
                 $"Tổng thanh toán: {_receipt.TotalAmount:N0} VNĐ ({PaymentMethods.ToDisplay(_receipt.PaymentMethod)})\n" +
                 "Trạng thái: Đã thanh toán thành công";
 

@@ -95,7 +95,7 @@ namespace CinemaManagement.Forms.Shared
             }
             sb.AppendLine();
             foreach (var t in _receipt.Tickets)
-                sb.AppendLine($"Vé {t.SeatNumber,-5} ({SeatTypes.ToDisplay(t.SeatType),-6}) {t.Price,12:N0} đ  [{t.TicketCode}]");
+                sb.AppendLine($"Vé {t.SeatNumber,-5} {SeatTypes.ToDisplay(t.SeatType),-8} {AudienceTypes.ShortDisplay(t.AudienceType),-9} {t.Price,10:N0} đ  [{t.TicketCode}]");
             foreach (var c in _receipt.Combos)
                 sb.AppendLine($"{c.ComboName} x{c.Quantity,-3} {c.LineTotal,18:N0} đ");
             sb.AppendLine("----------------------------------------");

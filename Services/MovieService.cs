@@ -24,14 +24,25 @@ namespace CinemaManagement.Services
             return db.Movies.AsNoTracking().FirstOrDefault(m => m.MovieId == movieId);
         }
 
+        public List<Movie> GetMoviesForKiosk(string filter)
+        {
+            using var db = DbFactory.Create();
+            return KioskMoviesQuery(db, filter).ToList();
+        }
+
         public async Task<List<Movie>> GetMoviesForKioskAsync(string filter)
         {
             await using var db = DbFactory.Create();
-            DateTime now = DateTime.Now;
+            return await KioskMoviesQuery(db, filter).ToListAsync();
+        }
+
+        private static IQueryable<Movie> KioskMoviesQuery(CinemaDbContext db, string filter)
+        {
+            DateTime cutoff = DateTime.Now.AddMinutes(-ShowtimeService.SellUntilMinutesAfterStart);
             DateTime tomorrow = DateTime.Today.AddDays(1);
             DateTime windowEnd = DateTime.Today.AddDays(ShowtimeService.SalesWindowDays);
 
-            var upcoming = db.Showtimes.Where(s => s.StartTime > now && s.StartTime < windowEnd);
+            var upcoming = db.Showtimes.Where(s => s.StartTime > cutoff && s.StartTime < windowEnd);
 
             switch (filter)
             {
@@ -42,17 +53,17 @@ namespace CinemaManagement.Services
                     upcoming = upcoming.Where(s => s.Room.RoomType.Contains("IMAX") || s.Room.RoomName.Contains("IMAX"));
                     break;
                 case "Standard":
-                    upcoming = upcoming.Where(s => !s.Room.RoomType.Contains("IMAX") && !s.Room.RoomName.Contains("IMAX"));
+                    upcoming = upcoming.Where(s => !s.Room.RoomType.Contains("IMAX") && !s.Room.RoomName.Contains("IMAX")
+                                                   && s.Room.RoomType != RoomTypes.ScreenX);
                     break;
                 default:
                     break;
             }
 
             var movieIds = upcoming.Select(s => s.MovieId).Distinct();
-            return await db.Movies.AsNoTracking()
+            return db.Movies.AsNoTracking()
                 .Where(m => movieIds.Contains(m.MovieId))
-                .OrderBy(m => m.Title)
-                .ToListAsync();
+                .OrderBy(m => m.Title);
         }
 
         public void Add(Movie movie)

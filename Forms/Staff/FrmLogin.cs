@@ -43,7 +43,17 @@ namespace CinemaManagement.Forms.Staff
             _authService = new AuthService();
             SetupMasterLayout();
             BuildLoginCard();
-            WindowLayout.ScaleToStandard(this);
+            WindowLayout.ApplyStandardSize(this);
+            Resize += (_, _) => CenterCard();
+            CenterCard();
+        }
+
+        private void CenterCard()
+        {
+            if (pnlCard == null) return;
+            pnlCard.Location = new Point(
+                Math.Max(0, (ClientSize.Width - pnlCard.Width) / 2),
+                Math.Max(0, (ClientSize.Height - pnlCard.Height) / 2));
         }
 
         private void SetupMasterLayout()
@@ -61,8 +71,6 @@ namespace CinemaManagement.Forms.Staff
                 Size = new Size(460, 580),
                 BackColor = COLOR_CARD_BG
             };
-            pnlCard.Location = new Point((this.ClientSize.Width - pnlCard.Width) / 2, (this.ClientSize.Height - pnlCard.Height) / 2);
-            pnlCard.Anchor = AnchorStyles.None;
 
             Label lblIconCinema = new Label
             {
@@ -77,10 +85,10 @@ namespace CinemaManagement.Forms.Staff
             lblTitle = new Label
             {
                 Text = "CINELUXE",
-                Font = new Font("Segoe UI", 20, FontStyle.Bold),
+                Font = new Font("Segoe UI", 18, FontStyle.Bold),
                 ForeColor = COLOR_TEXT_PRIMARY,
-                Location = new Point(20, 68),
-                Size = new Size(420, 32),
+                Location = new Point(20, 62),
+                Size = new Size(420, 40),
                 TextAlign = ContentAlignment.MiddleCenter
             };
 

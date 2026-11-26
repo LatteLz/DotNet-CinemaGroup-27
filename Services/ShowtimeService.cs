@@ -151,7 +151,7 @@ namespace CinemaManagement.Services
             if (format == "IMAX")
                 list = list.Where(s => IsImax(s)).ToList();
             else if (format == "Standard")
-                list = list.Where(s => !IsImax(s)).ToList();
+                list = list.Where(s => !IsImax(s) && s.RoomType != RoomTypes.ScreenX).ToList();
 
             return list.OrderBy(s => s.StartTime).ToList();
         }

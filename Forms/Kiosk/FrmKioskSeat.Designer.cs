@@ -236,7 +236,7 @@ partial class FrmKioskSeat
 
             lblTotalPrice = new Label
             {
-                Text = "TỔNG TIỀN: 0 đ",
+                Text = "TẠM TÍNH: 0 đ",
                 Font = new Font("Segoe UI", 14F, FontStyle.Bold),
                 ForeColor = ColorTranslator.FromHtml("#ffb961"),
                 Location = new Point(1100, 26),

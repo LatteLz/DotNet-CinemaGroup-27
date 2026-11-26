@@ -152,6 +152,10 @@ public partial class FrmKioskPayment : Form
                 AutoSize = true
             };
 
+            int valueX = Math.Max(rightX, lblLeft.PreferredWidth + 24);
+            lblRight.MaximumSize = new Size(Math.Max(140, 660 - valueX), 0);
+            lblRight.Left = valueX;
+
             pnlOrderDetails.Controls.Add(lblLeft);
             pnlOrderDetails.Controls.Add(lblRight);
             yPos += Math.Max(lblLeft.Height, lblRight.Height) + 16;
@@ -164,8 +168,12 @@ public partial class FrmKioskPayment : Form
             AddLine("Suất chiếu:", showtime.StartTime.ToString("HH:mm - dd/MM/yyyy"));
         }
 
-        AddLine("Ghế đã chọn:", string.Join(", ", _order.SeatNumbers), true, ColorTranslator.FromHtml("#38bdf8"));
-        AddLine($"Tiền vé ({_order.SeatNumbers.Count} ghế):", $"{_order.TicketTotal:N0} VNĐ", true);
+        AddLine("Vé đã chọn:", "", true, ColorTranslator.FromHtml("#38bdf8"));
+        foreach (var t in _order.Tickets)
+        {
+            AddLine($"  • Ghế {t.SeatNumber} ({SeatTypes.ToDisplay(t.SeatType)}, {AudienceTypes.ShortDisplay(t.AudienceType)})", $"{t.Price:N0} VNĐ");
+        }
+        AddLine($"Tiền vé ({_order.Tickets.Count} vé):", $"{_order.TicketTotal:N0} VNĐ", true);
 
         if (_order.Combos.Any())
         {
@@ -199,6 +207,7 @@ public partial class FrmKioskPayment : Form
             {
                 ShowtimeId = _order.ShowtimeId,
                 SeatIds = _order.SeatIds,
+                SeatAudiences = _order.Tickets.ToDictionary(t => t.SeatId, t => t.AudienceType),
                 SessionId = _order.SessionId,
                 Combos = _order.Combos.Select(c => new ComboOrderLine { ComboId = c.ComboId, Quantity = c.Quantity }).ToList(),
                 Channel = SalesChannels.Kiosk,

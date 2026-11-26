@@ -25,15 +25,18 @@ namespace CinemaManagement.Helpers
             return null;
         }
 
-        public static string SavePosterCopy(string sourceFile)
+        public static string SavePosterCopy(string sourceFile) => SaveImageCopy(sourceFile, "poster");
+
+        public static string SaveImageCopy(string sourceFile, string prefix)
         {
             string targetDir = Path.Combine(Application.StartupPath, "Image");
             Directory.CreateDirectory(targetDir);
 
-            if (string.Equals(Path.GetDirectoryName(Path.GetFullPath(sourceFile)), Path.GetFullPath(targetDir), StringComparison.OrdinalIgnoreCase))
+            if (!IsUploadedFileName(Path.GetFileName(sourceFile))
+                && string.Equals(Path.GetDirectoryName(Path.GetFullPath(sourceFile)), Path.GetFullPath(targetDir), StringComparison.OrdinalIgnoreCase))
                 return "Image/" + Path.GetFileName(sourceFile);
 
-            string fileName = $"poster_{DateTime.Now:yyyyMMddHHmmss}_{Guid.NewGuid().ToString("N")[..6]}{Path.GetExtension(sourceFile)}";
+            string fileName = $"{prefix}_{DateTime.Now:yyyyMMddHHmmss}_{Guid.NewGuid().ToString("N")[..6]}{Path.GetExtension(sourceFile)}";
             File.Copy(sourceFile, Path.Combine(targetDir, fileName));
             return "Image/" + fileName;
         }
@@ -42,7 +45,7 @@ namespace CinemaManagement.Helpers
         {
             if (string.IsNullOrWhiteSpace(relativePath)) return;
             string fileName = Path.GetFileName(relativePath);
-            if (!fileName.StartsWith("poster_", StringComparison.OrdinalIgnoreCase)) return;
+            if (!IsUploadedFileName(fileName)) return;
 
             string fullPath = Path.Combine(Application.StartupPath, "Image", fileName);
             try
@@ -52,6 +55,10 @@ namespace CinemaManagement.Helpers
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
+
+        private static bool IsUploadedFileName(string fileName)
+            => fileName.StartsWith("poster_", StringComparison.OrdinalIgnoreCase)
+               || fileName.StartsWith("combo_", StringComparison.OrdinalIgnoreCase);
 
         public static Image? Load(string? relativeOrAbsolutePath)
         {
