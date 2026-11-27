@@ -1,5 +1,5 @@
 namespace CinemaManagement.Models
-{
+{ //luat
     public static class Roles
     {
         public const string Admin = "Admin";
